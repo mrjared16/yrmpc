@@ -1,0 +1,26 @@
+# Build artifacts
+/rmpc/target/
+*.rlib
+*.so
+*.dylib
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials & Secrets
+music.youtube.com_cookies.txt
+*.json
+!rmpc/Cargo.json
+
+# Agent metadata (keep)
+!.agent/
+!.serena/
