@@ -1,5 +1,7 @@
 # RMPC YouTube Music TUI - Knowledge Transfer
 
+IMPORTANT: utilize the serena tool call as much as possible to effectively read and modify this big and complete code base.
+
 > **Context for Next LLM Session**: This document provides complete context for continuing development of the rmpc YouTube Music fork.
 
 ---
