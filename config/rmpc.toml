@@ -1,0 +1,3 @@
+address = "127.0.0.1:6600"
+cache_dir = "/tmp/rmpc/cache"
+theme = "default"
