@@ -1,26 +1,16 @@
-# Build artifacts
-/rmpc/target/
-*.rlib
-*.so
-*.dylib
-*.dll
+# Temporary documentation files
+.commit-message.txt
+.pre-commit-checklist.md
+.verification-report.md
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Auth files
+cookies.txt
+headers.txt
 
-# OS
-.DS_Store
-Thumbs.db
+# External repos (should be submodules if needed)
+youtui/
+ytmusicapi/
 
-# Credentials & Secrets
-music.youtube.com_cookies.txt
-*.json
-!rmpc/Cargo.json
-
-# Agent metadata (keep)
-!.agent/
-!.serena/
+# Test setup scripts
+setup/
+tests/
