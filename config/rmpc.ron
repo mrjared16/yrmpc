@@ -1,7 +1,64 @@
+#![enable(implicit_some)]
+#![enable(unwrap_newtypes)]
+#![enable(unwrap_variant_newtypes)]
 (
     backend: youtube,
     youtube: (
-        auth_file: Some("~/.config/rmpc/cookie.txt"),
+        auth_file: Some("/home/phucdnt/.config/rmpc/cookie.txt"),
     ),
     theme: Some("default"),
+    tabs: [
+        (
+            name: "Search",
+            pane: Pane(Search),
+        ),
+        (
+            name: "Queue",
+            pane: Split(
+                direction: Horizontal,
+                panes: [
+                    (
+                        size: "40%",
+                        pane: Split(
+                            direction: Vertical,
+                            panes: [
+                                (
+                                    size: "3",
+                                    pane: Pane(Lyrics)
+                                ),
+                                (
+                                    size: "100%",
+                                    pane: Pane(AlbumArt)
+                                ),
+                            ],
+                        ),
+                    ), 
+                    (
+                        size: "60%",
+                        pane: Pane(Queue)
+                    ),
+                ],
+            ),
+        ),
+        (
+            name: "Directories",
+            pane: Pane(Directories),
+        ),
+        (
+            name: "Artists",
+            pane: Pane(Artists),
+        ),
+        (
+            name: "Album Artists",
+            pane: Pane(AlbumArtists),
+        ),
+        (
+            name: "Albums",
+            pane: Pane(Albums),
+        ),
+        (
+            name: "Playlists",
+            pane: Pane(Playlists),
+        ),
+    ],
 )
