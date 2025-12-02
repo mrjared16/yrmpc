@@ -8,14 +8,10 @@ cookies.txt
 headers.txt
 
 # External repos (should be submodules if needed)
-youtui/
-ytmusicapi/
 
 # Test setup scripts
-setup/
-tests/
 node_modules/
 .tui-test/
-.serenabuild/
+.serena/
 bun.lock
 mise.toml
