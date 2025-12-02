@@ -16,3 +16,6 @@ setup/
 tests/
 node_modules/
 .tui-test/
+.serenabuild/
+bun.lock
+mise.toml
