@@ -1,0 +1,7 @@
+(
+    backend: youtube,
+    youtube: (
+        auth_file: Some("~/.config/rmpc/headers_auth.json"),
+    ),
+    theme: Some("default"),
+)

@@ -1,248 +1,456 @@
 # LLM Agent Guidelines - yrmpc Project
 
 **Project**: YouTube Music TUI Client (Rust + Ratatui)  
-**Last Updated**: 2024-12-02
+**Last Updated**: 2025-12-06  
+**Current Phase**: Search UI Implementation
 
 ---
 
-## CRITICAL: Read This First
+## 🎯 CRITICAL: Current Mission
 
-### Current Bug Status
-| Bug | Status | Test |
-|-----|--------|------|
-| Bug #1: Enter on song does nothing | ❌ BROKEN | `npm test` - "FEATURE: play song" fails |
-| Bug #2: HTTP 400 on artist/playlist | ❌ BROKEN | `npm test` - "FEATURE: view artist/playlist" fails |
+**Your ONLY job**: Fix Search Integration Bug (REGRESSION)
 
-**When bugs are fixed**: `npm test` should show 6/6 passed (currently 3/6)
+### The Bug (Search Broke After Refactoring)
+```
+Before refactoring: Search worked
+  - "/" opened search panel
+  - Typing showed suggestions in side panel
+  - Enter on result showed details
 
-### Root Causes (ALREADY IDENTIFIED - Don't Re-investigate)
+After service layer refactoring: BROKEN
+  - No suggestions panel appears
+  - Enter shows no results
+  - Integration between UI → Protocol → Services broken
+```
 
-**Bug #1**: `enqueue_multiple` is a NO-OP for YouTube backend
-- File: `rmpc/src/shared/mpd_client_ext.rs` lines 769-775
-- Fix: Implement actual play logic in the `Client::YouTube` match arm
+**Root Cause**: Service layer refactoring broke wiring between TUI and backend
 
-**Bug #2**: ID prefix not stripped before API call
-- File: `rmpc/src/player/youtube_backend.rs` - `browse_artist()`, `browse_playlist()`
-- IDs come as `"artist:UC..."` but ytmapi-rs expects `"UC..."`
-- Fix: `let raw_id = id.strip_prefix("artist:").unwrap_or(id);`
+### What's Already Done ✅
+- ✅ Daemon architecture (systemd service)
+- ✅ YouTube API integration (ytmapi-rs)
+- ✅ Backend services (ApiService, PlaybackService, QueueService)
+- ✅ Cookie authentication
+- ✅ MPV streaming pipeline
+- ✅ **Search UI exists** (it worked before!)
+
+### What's Broken ❌ (REGRESSION)
+- ❌ Search suggestions panel doesn't appear
+- ❌ Enter on search result shows nothing
+- ❌ Integration bug: UI → Protocol → ApiService wiring broken
+- ❌ Likely caused by service layer refactoring
+
+**Status**: This is a REGRESSION - search worked before the refactoring
 
 ---
 
-## CRITICAL: What NOT To Do
+## 📖 Documentation Index
 
-### 1. DO NOT Re-investigate Bugs
-The root causes are documented above. Don't waste time re-reading code to find what's already known.
+### Must Read First (5 min)
+1. **This file** - Mission brief
+2. [`docs/DAEMON_SETUP.md`](#) - How daemon works (don't modify it)
+3. [`docs/SEARCH_IMPLEMENTATION_GUIDE.md`](#) - Your task
 
-### 2. DO NOT Run The TUI Directly
-```bash
-# WRONG - You cannot interact with TUI from shell
-./rmpc/target/release/rmpc
+### Reference Docs
+- `docs/ARCHITECTURE.md` - System overview
+- `docs/PROJECT_STATUS.md` - What works/broken
+- `walkthrough.md` - Recent session work
 
-# WRONG - tmux send-keys doesn't work with raw terminal mode
-tmux send-keys "i" "lofi" "Enter"
-```
-
-### 3. DO NOT Write Tests That Always Pass
-```typescript
-// WRONG - passes even when bug exists (no positive assertion)
-const log = readLogFile();
-expect(log.includes('error')).toBe(false);  // No error ≠ success!
-
-// CORRECT - requires positive evidence of action
-expect(log.includes('loadfile')).toBe(true);  // Must see the action happen
-expect(log.includes('error')).toBe(false);    // AND no errors
-```
-
-### 4. DO NOT Assume Features Work
-**Current state (verified by failing tests)**:
-- ❌ Enter on song: Nothing happens, no audio
-- ❌ Enter on artist/playlist: HTTP 400 error, blank page
+### Code Navigation
+- Search Backend: `rmpc/src/player/youtube/services/api_service.rs`
+- Search UI: `rmpc/src/ui/panes/search/` (needs implementation)
+- Protocol: `rmpc/src/player/youtube/protocol.rs`
 
 ---
 
-## How To Test This Project
+## 🚫 DO NOT Touch
 
-### E2E Tests (Primary - Use This)
-```bash
-npm test
+### 1. Daemon Architecture (DONE)
 ```
-- **Current**: 3 passed, 3 failed (feature tests fail due to bugs)
-- **After fixes**: Should be 6/6 passed
-- Uses `RMPC_LOG_FILE` env var to capture app logs
-- Tests check for **positive evidence** of actions in logs
-
-### E2E Test Infrastructure Details
-```typescript
-// Log capture mechanism
-const LOG_FILE = '/tmp/rmpc-e2e-test.log';
-terminal.write(`RMPC_LOG_FILE=${LOG_FILE} RUST_LOG=debug ${RMPC_BIN}\r`);
-
-// Read logs after action
-const log = fs.readFileSync(LOG_FILE, 'utf-8');
-expect(log.includes('loadfile')).toBe(true);  // Verify action happened
+Files to avoid:
+- rmpc/src/lib.rs
+- rmpc/src/bin/rmpcd.rs  
+- rmpc/src/player/youtube/daemon.rs
+- rmpc/src/player/youtube/client.rs
+- setup/*
 ```
 
-**tui-test Limitations**:
-- No regex support in `getByText()` - use string matching
-- Keyboard input may not reliably trigger actual functionality
-- Tests run in parallel - use unique log files if needed
+**Why**: Systemd service works. Modifying breaks deployment.
 
-### Rust Integration Tests
-```bash
-cd rmpc && cargo test --test youtube_backend_tests
+### 2. Service Layer (WORKS)
+```
+Don't refactor:
+- rmpc/src/player/youtube/services/*.rs
+- rmpc/src/player/youtube/server.rs
 ```
 
-### For Verifying Audio System
-```bash
-python3 tests/verify_audio.py  # Returns: 0=playing, 1=idle, 2=paused
+**Why**: Backend logic is correct. Focus on UI.
+
+### 3. MPV Integration (STABLE)
+```
+Leave alone:
+- rmpc/src/player/youtube_backend.rs
+- rmpc/src/player/mpv_ipc.rs
 ```
 
-### Manual Testing (For TUI interaction)
-```bash
-./rmpc/target/release/rmpc --config ./config/rmpc.ron
-```
+**Why**: Streaming works once search is fixed.
 
 ---
 
-## Project Structure
+## ✅ DO Focus On
 
-```
-yrmpc/
-├── rmpc/                    # Main Rust codebase (submodule)
-│   ├── src/
-│   │   ├── player/
-│   │   │   ├── youtube_backend.rs  # YouTube API + MPV control
-│   │   │   └── mpv_ipc.rs          # MPV IPC communication
-│   │   └── ui/panes/search/        # Search UI pane
-│   └── tests/                      # Rust integration tests
-├── tests/
-│   ├── e2e/                        # TypeScript UI tests (LIMITED)
-│   ├── verify_audio.py             # MPV state checker
-│   └── integration_test.sh         # Broken - don't use
-├── config/rmpc.ron                 # App configuration
-└── docs/                           # Documentation
-```
+### Your Implementation Path
 
----
-
-## Bug Fixes Required
-
-### Bug #1: Enter on Song Does Nothing
-**Root Cause**: `enqueue_multiple` returns `Ok(())` without doing anything for YouTube backend
-
-**File**: `rmpc/src/shared/mpd_client_ext.rs`
-**Lines**: 769-775
-**Current Code**:
+**Step 1**: Implement API Call (30 min)
 ```rust
-crate::player::Client::YouTube(_) => {
-    log::debug!("enqueue_multiple not fully supported in MPV/YouTube backend");
-    Ok(())  // ← THIS IS THE PROBLEM - does nothing!
+// File: rmpc/src/player/youtube/services/api_service.rs
+pub fn get_suggestions(&self, query: &str) -> Result<Vec<String>> {
+    // TODO: Call self.api.search(query) 
+    // Return actual suggestions, not empty vec
 }
 ```
 
-**Fix Strategy**:
-1. Get the YouTube backend from `Client::YouTube(backend)`
-2. For each song, call `backend.play_id(song_id)` or similar
-3. Look at how `play_id` works in `youtube_backend.rs` for reference
-
-**Call Chain** (for context):
+**Step 2**: Create Search Panel (1 hour)
 ```
-UI: CommonAction::Confirm → resolve_and_enqueue() → enqueue_multiple() → NO-OP
+// Location: rmpc/src/ui/panes/search/
+- Create suggestions_panel.rs
+- Wire keyboard "/" to trigger search
+- Display results in TUI list
 ```
 
-### Bug #2: HTTP 400 on Artist/Playlist Browse
-**Root Cause**: IDs have prefixes that ytmapi-rs doesn't expect
-
-**File**: `rmpc/src/player/youtube_backend.rs`
-**Functions**: `browse_artist()`, `browse_playlist()`
-
-**ID Format Issue**:
-- Stored as: `"artist:UC..."`, `"playlist:PL..."`
-- API expects: `"UC..."`, `"PL..."`
-
-**Fix** (add at start of each function):
-```rust
-// In browse_artist():
-let raw_id = artist_id.strip_prefix("artist:").unwrap_or(artist_id);
-
-// In browse_playlist():
-let raw_id = playlist_id.strip_prefix("playlist:").unwrap_or(playlist_id);
-```
-
-**Verification**: After fix, `npm test` should pass "FEATURE: view artist/playlist"
-
----
-
-## Audio Architecture
-
-```
-User Input → yrmpc TUI → YouTubeBackend → MpvIpc → MPV Process → Audio
-                              ↓
-                    YouTube Music API (ytmapi-rs)
-                              ↓
-                    Stream URL (rusty_ytdl)
-```
-
-**To verify MPV state programmatically**:
-```python
-# tests/verify_audio.py queries MPV via IPC socket
-# Returns: 0=playing, 1=idle, 2=paused, 3=socket unavailable
-python3 tests/verify_audio.py
-```
-
----
-
-## Before Starting Any Task
-
-1. ✅ Read this file completely
-2. ✅ Do NOT try to run or interact with the TUI
-3. ✅ Use Rust tests to verify backend functionality
-4. ✅ Check `docs/PROJECT_STATUS.md` for current state
-5. ✅ Ask user to manually test TUI changes
-
----
-
-## Tools To Use
-
-### For Code Navigation
-- `Grep` - Search for patterns
-- `Read` - Read file contents
-- `serena___find_symbol` - Find Rust symbols
-
-### For Code Changes
-- `Edit` - Modify existing files
-- `Create` - Create new files
-
-### For Running Tests
+**Step 3**: Test End-to-End (15 min)
 ```bash
-# Rust tests (RELIABLE)
-cd rmpc && cargo test
+# Install daemon (one time)
+./setup/rmpcd-install
 
-# Python audio check (RELIABLE)
-python3 tests/verify_audio.py
+# Run client
+./rmpc --config config/rmpc.ron
 
-# E2E tests (UI ONLY - don't trust for functionality)
-npm test
+# Press "/" and type artist name
+# Should see: suggestions dropdown
 ```
 
 ---
 
-## Key Files
+## 🏗️ Architecture Quick Reference
 
-| File | Purpose | Bug |
-|------|---------|-----|
-| `rmpc/src/shared/mpd_client_ext.rs` | `enqueue_multiple` - NO-OP for YouTube | Bug #1 |
-| `rmpc/src/player/youtube_backend.rs` | `browse_artist/playlist` - ID prefix issue | Bug #2 |
-| `rmpc/src/player/youtube_backend.rs` | `play_id` - Reference for Bug #1 fix | - |
-| `rmpc/src/ui/panes/search/mod.rs` | Search UI, Enter key handling | - |
-| `tests/e2e/rmpc-tui-test.spec.ts` | E2E tests with log assertions | - |
+### Data Flow
+```
+User "/" key
+  ↓
+UI KeyEvent
+  ↓
+Search Panel
+  ↓
+Protocol::Search command
+  ↓
+UnixSocket → rmpcd
+  ↓
+ApiService::get_suggestions()
+  ↓
+ytmapi-rs API
+  ↓
+Results ← Protocol::SearchResult
+  ↓
+UI renders list
+```
+
+### Key Components
+
+**Backend** (daemon process)
+- `YouTubeServer` - IPC handler
+- `ApiService` - YouTube API wrapper
+- `PlaybackService` - MPV control
+- `QueueService` - Playlist management
+
+**Frontend** (rmpc client)
+- `YouTubeClient` - Socket communication
+- UI Panes - Ratatui widgets
+- KeyEvent handlers - User input
+
+**Protocol** (shared)
+- `Command` enum - Client requests
+- `Response` enum - Server responses
+- Serde serialization over Unix socket
 
 ---
 
-## Lessons Learned (Don't Repeat These Mistakes)
+## 🧪 How To Test
 
-1. **Tests must require positive evidence** - checking for absence of errors is not enough
-2. **Use `RMPC_LOG_FILE` env var** - not stderr redirect - to capture logs
-3. **tui-test has limitations** - keyboard input may not trigger actual backend calls
-4. **Root causes are documented** - don't re-investigate, just implement the fixes
-5. **Run `npm test` after each fix** - tests will flip from fail to pass when fixed
+### Quick Test Loop
+```bash
+# 1. Build
+cargo build --release
+
+# 2. Restart daemon (picks up changes)
+systemctl --user restart rmpcd
+
+# 3. Run client
+./rmpc --config config/rmpc.ron
+
+# 4. Test search
+# Press "/", type "lofi", see suggestions
+```
+
+### Verify Daemon Works
+```bash
+# Check service
+systemctl --user status rmpcd
+
+# View logs
+journalctl --user -u rmpcd -f
+
+# Check socket
+ls -la /tmp/yrmpc-yt.sock
+```
+
+### Debug API Calls
+```bash
+# Run daemon with debug logging
+systemctl --user stop rmpcd
+RUST_LOG=debug rmpcd
+
+# In another terminal, run rmpc
+# Watch API calls in daemon output
+```
+
+---
+
+## 📁 File Reference
+
+### Must Read
+| File | Purpose | Your Focus |
+|------|---------|------------|
+| `rmpc/src/player/youtube/services/api_service.rs` | Stub to implement | ⭐ FIX THIS |
+| `rmpc/src/ui/panes/search/mod.rs` | Search UI entry | ⭐ CREATE PANEL |
+| `rmpc/src/player/youtube/protocol.rs` | IPC messages | 📖 Reference |
+
+### Context (Don't Modify)
+| File | Purpose |
+|------|---------|
+| `rmpc/src/lib.rs` | Library crate (for rmpcd) |
+| `rmpc/src/bin/rmpcd.rs` | Daemon binary |
+| `setup/rmpcd-install` | Systemd install script |
+
+### Documentation
+| File | Contents |
+|------|----------|
+| `docs/SEARCH_IMPLEMENTATION_GUIDE.md` | Step-by-step search impl |
+| `docs/DAEMON_SETUP.md` | How daemon works |
+| `walkthrough.md` | Recent session work |
+
+---
+
+## 🐛 Known Issues
+
+| Issue | Impact | Status |
+|-------|--------|--------|
+| Search UI missing | Blocks all testing | 🔴 YOUR TASK |
+| No search results panel | Cannot see suggestions | 🔴 YOUR TASK |
+| `get_suggestions()` stubbed | Returns empty | 🔴 YOUR TASK |
+
+---
+
+## 💡 Tips
+
+### Ratatui (TUI Framework)
+```rust
+// Create list widget
+use ratatui::widgets::{List, ListItem};
+
+let items: Vec<ListItem> = suggestions
+    .iter()
+    .map(|s| ListItem::new(s.clone()))
+    .collect();
+
+let list = List::new(items)
+    .block(Block::default().title("Suggestions"));
+```
+
+### ytmapi-rs API
+```rust
+// Search for suggestions
+let results = api.search("lofi", SearchType::Songs)?;
+
+// Parse results
+let suggestions: Vec<String> = results
+    .into_iter()
+    .map(|r| r.name)
+    .collect();
+```
+
+### IPC Protocol
+```rust
+// In client (rmpc)
+let cmd = Command::Search { query: "lofi".into() };
+client.send(cmd)?;
+let response = client.receive()?;
+
+// In server (rmpcd)
+match command {
+    Command::Search { query } => {
+        let results = api_service.get_suggestions(&query)?;
+        Response::SearchResults(results)
+    }
+}
+```
+
+---
+
+## 🚀 Getting Started Checklist
+
+- [ ] Read this file completely
+- [ ] Read `docs/SEARCH_IMPLEMENTATION_GUIDE.md`
+- [ ] Locate `api_service.rs` and understand stub
+- [ ] Check `ui/panes/search/mod.rs` structure
+- [ ] Review `protocol.rs` for Search command/response
+- [ ] Plan: API implementation first, then UI
+- [ ] DO NOT touch daemon files
+- [ ] Test incrementally (API → Protocol → UI)
+- [ ] Consider E2E tests for validation (see below)
+
+---
+
+## 🧪 E2E Testing Approach (REQUIRED FOR TDD)
+
+### Critical: Use Log-Based Testing
+
+**Problem**: Search broke during refactoring. Need TDD loop to fix.
+
+**Solution**: Log-file-based E2E tests
+
+### Implementation (Recommended Approach)
+
+**1. Create Test Script**
+```bash
+#!/bin/bash
+# tests/test_search_regression.sh
+
+LOG_FILE="/tmp/rmpc_search_test.log"
+rm -f "$LOG_FILE"
+
+# Start daemon
+systemctl --user start rmpcd
+sleep 1
+
+# Run rmpc with logging
+RUST_LOG=debug RMPC_LOG_FILE="$LOG_FILE" rmpc --config config/rmpc.ron &
+RMPC_PID=$!
+sleep 2
+
+# Simulate search: "/" key, type "lofi", Enter
+# (Use headless mode or xdotool if available)
+
+sleep 3
+kill $RMPC_PID
+
+# Validate logs
+if grep -q "search.*suggestions" "$LOG_FILE"; then
+    echo "✅ Search API called"
+else
+    echo "❌ Search API NOT called"
+    exit 1
+fi
+
+if grep -q "UI.*search.*panel" "$LOG_FILE"; then
+    echo "✅ Search panel updated"
+else  
+    echo "❌ Search panel NOT updated"
+    exit 1
+fi
+
+echo "✅ All tests passed"
+```
+
+**2. TDD Loop**
+```bash
+# Red: Test fails (current state)
+./tests/test_search_regression.sh
+# ❌ Search API NOT called
+
+# Green: Fix integration bug
+vim rmpc/src/ui/panes/search/mod.rs
+vim rmpc/src/player/youtube/client.rs
+
+# Verify: Test passes
+./tests/test_search_regression.sh
+# ✅ All tests passed
+```
+
+**3. What to Check in Logs**
+```bash
+# Search panel opened?
+grep "search.*panel.*open" /tmp/rmpc_search_test.log
+
+# API call made?
+grep "ApiService.*get_suggestions" /tmp/rmpc_search_test.log
+
+# Protocol command sent?
+grep "Protocol.*Search" /tmp/rmpc_search_test.log
+
+# Response received?
+grep "SearchResults" /tmp/rmpc_search_test.log
+
+# UI updated?
+grep "render.*suggestions" /tmp/rmpc_search_test.log
+```
+
+### Alternative: Protocol-Level Testing
+```rust
+// Test daemon directly (bypasses UI)
+#[test]
+fn test_search_protocol() {
+    let client = YouTubeClient::connect("/tmp/yrmpc-yt.sock").unwrap();
+    
+    // Send search command
+    client.send(Command::Search { query: "lofi" }).unwrap();
+    
+    // Verify response
+    let response = client.receive().unwrap();
+    assert!(matches!(response, Response::SearchResults(_)));
+    
+    // Response should have suggestions
+    if let Response::SearchResults(results) = response {
+        assert!(!results.is_empty(), "Search should return results");
+    }
+}
+```
+
+### Integration Testing Priority
+
+1. **Protocol test** - Test daemon IPC (isolate backend)
+2. **Log-based E2E** - Full workflow validation
+3. **Manual TUI test** - Visual confirmation
+
+**TDD is REQUIRED**: This is a regression bug. Tests prevent future breaks.
+
+---
+
+## 📞 When Stuck
+
+### Debug Checklist
+1. Is daemon running? `systemctl --user status rmpcd`
+2. Are sockets present? `ls /tmp/yrmpc-yt*`
+3. Check logs: `journalctl --user -u rmpcd -n 50`
+4. Build errors? Read carefully, don't guess
+5. Still stuck? Ask user for clarification
+
+### Common Pitfalls
+- ❌ Don't refactor daemon (it works)
+- ❌ Don't change protocol (it's stable)
+- ❌ Don't assume tests exist (they don't)
+- ✅ DO implement stub → wire UI → test manually
+
+---
+
+## 🎓 Learning Resources
+
+- Ratatui docs: https://ratatui.rs
+- ytmapi-rs: https://docs.rs/ytmapi-rs
+- Rust async: Not needed (daemon handles async)
+- Unix sockets: Client/server already work
+
+**Your job**: Connect UI to working backend via existing protocol.
+
+---
+
+**Remember**: Daemon works. API exists. Protocol defined. Just wire the UI.

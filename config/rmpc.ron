@@ -41,24 +41,20 @@
             ),
         ),
         (
-            name: "Directories",
-            pane: Pane(Directories),
-        ),
-        (
-            name: "Artists",
-            pane: Pane(Artists),
-        ),
-        (
-            name: "Album Artists",
-            pane: Pane(AlbumArtists),
-        ),
-        (
-            name: "Albums",
-            pane: Pane(Albums),
-        ),
-        (
-            name: "Playlists",
-            pane: Pane(Playlists),
+            name: "Saved",
+            pane: Split(
+                direction: Horizontal,
+                panes: [
+                    (
+                        size: "50%",
+                        pane: Pane(Playlists),
+                    ),
+                    (
+                        size: "50%",
+                        pane: Pane(Albums),
+                    ),
+                ],
+            ),
         ),
     ],
 )
