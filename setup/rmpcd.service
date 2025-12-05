@@ -1,0 +1,17 @@
+[Unit]
+Description=YouTube Music Daemon for rmpc
+Documentation=https://github.com/mierak/rmpc
+After=network.target pulseaudio.service pipewire.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/rmpcd
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+# Cleanup stale sockets on start
+ExecStartPre=-/bin/rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
+
+[Install]
+WantedBy=default.target

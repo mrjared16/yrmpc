@@ -1,0 +1,77 @@
+#!/bin/bash
+# rmpcd-install - Install YouTube Music daemon as systemd user service
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
+SERVICE_FILE="$SCRIPT_DIR/rmpcd.service"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${GREEN}=== rmpcd Installation ===${NC}"
+
+# Check if binary exists
+if [ ! -f "$BINARY" ]; then
+    echo -e "${YELLOW}Binary not found. Building...${NC}"
+    cd "$PROJECT_DIR/rmpc"
+    cargo build --release
+    BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
+fi
+
+# Create directories
+mkdir -p ~/.local/bin
+mkdir -p ~/.config/systemd/user
+
+# Copy binary
+echo "Installing binary to ~/.local/bin/rmpcd..."
+cp "$BINARY" ~/.local/bin/rmpcd
+chmod +x ~/.local/bin/rmpcd
+
+# Copy service file
+echo "Installing service to ~/.config/systemd/user/rmpcd.service..."
+cp "$SERVICE_FILE" ~/.config/systemd/user/rmpcd.service
+
+# Stop existing service if running
+systemctl --user stop rmpcd 2>/dev/null || true
+
+# Kill any leftover processes
+pkill -9 rmpcd 2>/dev/null || true
+pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
+
+# Remove stale sockets
+rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
+
+# Reload systemd
+echo "Reloading systemd..."
+systemctl --user daemon-reload
+
+# Enable and start service
+echo "Enabling and starting rmpcd service..."
+systemctl --user enable rmpcd
+systemctl --user start rmpcd
+
+# Wait for service to start
+sleep 2
+
+# Check status
+if systemctl --user is-active --quiet rmpcd; then
+    echo -e "${GREEN}✅ rmpcd service is running!${NC}"
+    echo ""
+    echo "Usage:"
+    echo "  systemctl --user status rmpcd   # Check status"
+    echo "  systemctl --user restart rmpcd  # Restart"
+    echo "  systemctl --user stop rmpcd     # Stop"
+    echo "  journalctl --user -u rmpcd -f   # View logs"
+    echo ""
+    echo "Now you can run: rmpc --config config/rmpc.ron"
+else
+    echo -e "${RED}❌ Service failed to start. Check logs:${NC}"
+    echo "  journalctl --user -u rmpcd -n 20"
+    exit 1
+fi

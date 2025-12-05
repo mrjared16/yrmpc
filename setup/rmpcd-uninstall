@@ -1,0 +1,33 @@
+#!/bin/bash
+# rmpcd-uninstall - Remove YouTube Music daemon service
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+echo -e "${RED}=== rmpcd Uninstallation ===${NC}"
+
+# Stop and disable service
+echo "Stopping service..."
+systemctl --user stop rmpcd 2>/dev/null || true
+systemctl --user disable rmpcd 2>/dev/null || true
+
+# Kill processes
+echo "Killing processes..."
+pkill -9 rmpcd 2>/dev/null || true
+pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
+
+# Remove files
+echo "Removing files..."
+rm -f ~/.local/bin/rmpcd
+rm -f ~/.config/systemd/user/rmpcd.service
+
+# Remove sockets
+rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
+
+# Reload systemd
+systemctl --user daemon-reload
+
+echo -e "${GREEN}✅ rmpcd has been uninstalled${NC}"
