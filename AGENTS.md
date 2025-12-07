@@ -1,69 +1,60 @@
-# LLM Agent Guidelines - yrmpc Project
+# LLM Agent Guidelines - yrmpc
 
 **Project**: YouTube Music TUI Client (Rust + Ratatui)  
-**Last Updated**: 2025-12-07  
-**Status**: Playable but Terrible UX
+**Updated**: 2025-12-08  
+**Status**: ✅ Core Playable - Daily Use
+
+---
+
+## Quick Start
+```bash
+cd rmpc && cargo build --release
+./restart_daemon.sh
+./rmpc/target/release/rmpc --config config/rmpc.ron
+```
 
 ---
 
 ## Current State
 
-### Works
-- Search → shows results (categories)
-- Enter on song → plays (5-6s delay)
-- Queue → refreshes after adding
-
-### Broken
-| Issue | Root Cause |
-|-------|-----------|
-| 5-6s delay | yt-dlp URL extraction |
-| ~~MPRIS garbage~~ | ✅ Fixed: set force-media-title before loadfile |
-| Artist/playlist views | Not implemented |
-| Status polling | 1s interval (configurable, wastes CPU) |
+| Feature | Status |
+|---------|--------|
+| Search (all types) | ✅ |
+| Playback (MPV) | ✅ |
+| Queue management | ✅ |
+| MPRIS integration | ✅ |
+| Daemon mode | ✅ |
+| Autocomplete | ✅ |
 
 ---
 
-## Backlog (Strategic Priority)
+## Next Priorities
 
-### P0 - Must Fix (Blocking Primary Use Case)
-1. **Enter on song only adds queue, no play** - Should clear queue, add, and play
-2. **Clear queue doesn't stop MPV playback** - `clear()` should stop current playback in MPV
-
-### P1 - Should Fix (Bugs Affecting UX)
-2. **TopResult parsing failure** - Artists without browse_id fail to parse
-
-### P2 - Nice to Have
-3. ~~**MPRIS metadata**~~ - ✅ Fixed (2025-12-07)
-4. **Views**: Artist, Playlist, Album - Not implemented
-5. **Local-first queue** - UI updates before network (rofi prep)
-6. **Status polling** - Push-based updates or increase interval
-7. **10s audio prefetch** - Pre-fetch audio for visible songs
-
-### P3 - Future
-8. **Search suggestions** - Autocomplete
+| Priority | Task |
+|----------|------|
+| P1 | Rich List UI (thumbnail + 2-line) |
+| P1 | High CPU idle (needs profiling) |
+| P2 | API filtering (fetch only needed sections) |
 
 ---
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `playback_service.rs` | MPV control (MPRIS fix attempt here) |
-| `server.rs:110-126` | Changed logs to DEBUG |
-| `mpd_client_ext.rs` | Queue operations |
+| Purpose | File |
+|---------|------|
+| Search API | `player/youtube/api.rs` |
+| Protocol | `player/youtube/protocol.rs` |
+| Client | `player/youtube/client.rs` |
+| Server | `player/youtube/server.rs` |
+| SearchItem types | `domain/search/` |
+| Config | `config/search.rs` |
 
 ---
 
-## Build & Test
+## Read Order for New LLM
 
-```bash
-cd rmpc && cargo build --release
-pkill rmpcd; ./restart_daemon.sh
-./rmpc/target/release/rmpc --config setup/config.ron
-```
-
----
-
-## DO NOT Touch
-- `setup/*` - systemd config
-- `bin/rmpcd.rs` - daemon entry
+1. This file (`AGENTS.md`)
+2. `LLM_ONBOARDING.md` - Research insights
+3. `docs/ARCHITECTURE.md` - System design
+4. `docs/FEATURES.md` - UX roadmap
+5. `docs/YOUTUBE_API.md` - API reference

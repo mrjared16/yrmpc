@@ -6,6 +6,11 @@
     youtube: (
         auth_file: Some("/home/phucdnt/.config/rmpc/cookie.txt"),
     ),
+    // Search result sections order and visibility
+    // Available: "top_results", "songs", "artists", "albums", "playlists", "videos"
+    search: (
+        sections: ["top_results", "songs", "artists", "albums", "playlists"],
+    ),
     theme: Some("default"),
     tabs: [
         (
