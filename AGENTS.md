@@ -17,20 +17,30 @@
 | Issue | Root Cause |
 |-------|-----------|
 | 5-6s delay | yt-dlp URL extraction |
-| MPRIS garbage | media-title property access fails in MPV |
+| ~~MPRIS garbage~~ | ✅ Fixed: set force-media-title before loadfile |
 | Artist/playlist views | Not implemented |
 | Status polling | 1s interval (configurable, wastes CPU) |
 
 ---
 
-## Backlog (Priority Order)
+## Backlog (Strategic Priority)
 
-1. **MPRIS metadata** - media-title fails, need MPV script-message or alternative
-2. **Status polling** - Push-based updates or increase interval
-3. **10s audio prefetch** - Pre-fetch audio for visible songs
-4. **Local-first queue** - UI updates before network
-5. **Views**: Artist, Playlist, Album
-6. **Search suggestions** - Autocomplete
+### P0 - Must Fix (Blocking Primary Use Case)
+1. **Enter on song only adds queue, no play** - Should clear queue, add, and play
+2. **Clear queue doesn't stop MPV playback** - `clear()` should stop current playback in MPV
+
+### P1 - Should Fix (Bugs Affecting UX)
+2. **TopResult parsing failure** - Artists without browse_id fail to parse
+
+### P2 - Nice to Have
+3. ~~**MPRIS metadata**~~ - ✅ Fixed (2025-12-07)
+4. **Views**: Artist, Playlist, Album - Not implemented
+5. **Local-first queue** - UI updates before network (rofi prep)
+6. **Status polling** - Push-based updates or increase interval
+7. **10s audio prefetch** - Pre-fetch audio for visible songs
+
+### P3 - Future
+8. **Search suggestions** - Autocomplete
 
 ---
 
