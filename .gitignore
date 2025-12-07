@@ -7,7 +7,8 @@
 cookies.txt
 headers.txt
 
-# External repos (should be submodules if needed)
+# External repos (local patches - receive upstream changes via git pull)
+youtui/
 
 # Test setup scripts
 node_modules/

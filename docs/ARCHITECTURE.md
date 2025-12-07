@@ -112,6 +112,24 @@ enum UiAppEvent {
 ```
 Cross-pane navigation system.
 
+### SearchItem Architecture (`domain/search/`)
+Type-safe search results with nested enums:
+```rust
+pub enum SearchItem {
+    Playable(PlayableItem),   // Song, Video → can queue
+    Browsable(BrowsableItem), // Artist, Album, Playlist → opens detail
+    Header(String),           // UI section separator
+}
+```
+
+**Why nested?** Prevents LSP violations - Artist never reaches queue code.
+
+| Type | Enter | Queue (n/l) |
+|------|-------|-------------|
+| Song/Video | Play | ✅ Direct |
+| Album/Playlist | Browse | ✅ Fetch→Queue |
+| Artist | Browse | ❌ Type prevents |
+
 ## Authentication Architecture
 
 ### Cookie Flow

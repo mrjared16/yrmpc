@@ -1,64 +1,58 @@
 # Project Status
 
-**Last Updated**: 2025-12-07  
-**Status**: ✅ Playable but Terrible UX
+**Last Updated**: 2025-12-08  
+**Status**: ✅ Core Playable - Daily Used
+
+---
+
+## Recent Completions
+
+| Feature | Status |
+|---------|--------|
+| **Search Display Refactor** | ✅ |
+| **Configurable Section Order** | ✅ |
+| **TopResult Support** | ✅ |
+| **Autocomplete Suggestions** | ✅ |
+| **Daemon Architecture** | ✅ |
 
 ---
 
 ## Current State
 
-### ✅ What Works
-| Feature | Status |
-|---------|--------|
-| Search | Returns results with categories |
-| Enter on song | Plays (5-6s delay) |
-| Queue | Updates after adding |
-| Audio playback | Works via MPV |
-| Daemon | Stable systemd service |
+### Working ✅
+- Search with all content types (songs, artists, albums, playlists)
+- Playback via MPV with streaming URLs
+- Queue management (add, remove, play next/last)
+- MPRIS integration
+- Daemon mode with systemd
 
-### ❌ What's Broken
-| Feature | Issue |
-|---------|-------|
-| Artist view | Not implemented |
-| Playlist view | Not implemented |
-| Album view | Not implemented |
-| MPRIS | Shows URL instead of title |
-| Response time | 5-6s delay (yt-dlp extraction) |
+### Known Issues
+| Issue | Priority | Notes |
+|-------|----------|-------|
+| High CPU idle | P1 | Needs profiling |
+| Slow cold start | P2 | First search takes ~3s |
 
 ---
 
-## Future Plans
+## Next Tasks
 
-### Local-First Queue
-Queue operations should update UI instantly:
-- Add/Delete/Move → UI first, then network sync
-
-### 10-Second Audio Prefetch
-Pre-fetch first 10s of audio for visible songs:
-- Background extraction during browsing
-- Instant playback from cache
+| Task | Priority | Description |
+|------|----------|-------------|
+| **Rich List UI** | P1 | Thumbnail + 2-line layout (opt-in) |
+| **API Filtering** | P2 | Only fetch sections user wants |
+| **Repeat/Shuffle** | P2 | Queue playback modes |
 
 ---
 
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `playback_service.rs:76` | MPRIS fix (set media-title) |
-| `mpd_client_ext.rs` | Queue operations |
-| `stream.rs` | Prefetch implementation |
-
----
-
-## Build & Test
+## Quick Commands
 
 ```bash
-# Build
+# Rebuild
 cd rmpc && cargo build --release
 
-# Restart daemon
+# Restart daemon  
 ./restart_daemon.sh
 
 # Run client
-./rmpc/target/release/rmpc --config setup/config.ron
+./rmpc/target/release/rmpc --config config/rmpc.ron
 ```
