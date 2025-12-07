@@ -1,7 +1,7 @@
 # Project Status
 
 **Last Updated**: 2025-12-08  
-**Status**: ✅ Core Playable - Daily Used
+**Status**: ✅ Core Playable - Daily Use
 
 ---
 
@@ -9,11 +9,11 @@
 
 | Feature | Status |
 |---------|--------|
-| **Search Display Refactor** | ✅ |
-| **Configurable Section Order** | ✅ |
-| **TopResult Support** | ✅ |
-| **Autocomplete Suggestions** | ✅ |
-| **Daemon Architecture** | ✅ |
+| Search Display Refactor | ✅ |
+| Configurable Section Order | ✅ |
+| TopResult Support | ✅ |
+| Autocomplete Suggestions | ✅ |
+| Daemon Architecture | ✅ |
 
 ---
 
@@ -34,13 +34,30 @@
 
 ---
 
-## Next Tasks
+## Next Tasks: Rich UI
 
-| Task | Priority | Description |
-|------|----------|-------------|
-| **Rich List UI** | P1 | Thumbnail + 2-line layout (opt-in) |
-| **API Filtering** | P2 | Only fetch sections user wants |
-| **Repeat/Shuffle** | P2 | Queue playback modes |
+> **Spec:** See [docs/ui-ux-provised.md](docs/ui-ux-provised.md) for full UI/UX specification.
+
+| ID | Task | Priority | Description |
+|----|------|----------|-------------|
+| R-RICH-1 | Rich List Component | P1 | Thumbnail + 2-line layout per item |
+| R-RICH-2 | Adaptive Behavior | P2 | Graceful degradation on narrow terminals |
+| R-SEARCH-2 | Preview Panel Thumbnail | P2 | Show cover in preview column |
+| R-QUEUE-1 | Playing Highlight | P0 | Bold + ▶ icon for current track |
+
+---
+
+## Backlog
+
+| Priority | Task | Description |
+|----------|------|-------------|
+| P1 | Rich List UI | Thumbnail + 2-line items (opt-in) |
+| P1 | High CPU Idle | Profiling needed |
+| P2 | API Filtering | Fetch only needed sections |
+| P2 | Repeat/Shuffle | Queue playback modes |
+| P2 | Play Next/Last | Queue position control |
+| P3 | Prefetch | Buffer next tracks |
+| P3 | Grid View | Album grid for browsing |
 
 ---
 
