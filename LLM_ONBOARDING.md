@@ -20,6 +20,8 @@ if let Some(url) = song.metadata.get("thumbnail").and_then(|v| v.first()) {
 - Images need direct `Rect` rendering
 - **Solution:** Custom row layout with `Layout::horizontal`
 
+> **Deep Dive:** See [docs/ui-ux-analysis.md](docs/ui-ux-analysis.md) for full TUI constraints, implementation patterns, and design decisions.
+
 ### 3. Thumbnail URLs Already Exist
 YouTube backend stores them in `song.metadata.get("thumbnail")`.
 
