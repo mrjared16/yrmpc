@@ -3,38 +3,18 @@
 ## Overview
 Transform search results from static lists into interactive views matching YouTube Music/Spotify UX, fully keyboard-driven without mouse dependency.
 
-## Current State (Dec 2, 2024 - Investigation Complete)
+## Current State (Dec 8, 2024)
 
-**✅ BACKEND WORKS:**
-- ✅ Backend parses ALL search result types correctly:
-  - Top Results (mixed types)
-  - Artists (line 1269 in youtube_backend.rs)
-  - Albums (line 1291)
-  - Playlists - Community + Featured (lines 1376-1452)
-  - Songs (line 1313)
-  - Videos (line 1337)
-- ✅ YouTube API returns diverse results (verified via test_search_artist)
-- ✅ Enter handler routes based on `type` metadata (line 917-939)
+**Search Refactor Complete ✅**
+- SearchItem type-safe enum in `domain/search/`
+- Configurable section order via `config.search.sections`
+- TopResult parsing with fallback
+- Autocomplete suggestions
 
-**✅ TESTS UPDATED:**
-- E2E tests rewritten to verify REAL functionality
-- Tests check: song titles, artist names, playlist details + logs
-- **3/6 passing** - failures are MEANINGFUL (verify actual data)
-- Regression tests pass (navigation, Unicode, back nav)
-
-**🎯 WHAT WORKS:**
-- Search functionality (returns all types from API)
-- Backend parsing (all types handled)
-- Enter routing (checks metadata type)
-- j/k navigation
-- Back navigation (Esc)
-- Visual mode
-- Unicode support
-
-**📝 TESTING STATUS:**
-- Core feature tests fail because they verify REAL DATA
-- This is GOOD - tests are meaningful
-- Need proper search queries or manual verification
+**Detail Views (Future Work):**
+- Playlist/Album/Artist detail views with featured artists
+- Visual selection mode (vim-style)
+- Play All / Save to Library actions
 
 ---
 
