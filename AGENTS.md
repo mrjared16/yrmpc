@@ -58,3 +58,22 @@ cd rmpc && cargo build --release
 3. `docs/ARCHITECTURE.md` - System design
 4. `docs/FEATURES.md` - UX roadmap
 5. `docs/YOUTUBE_API.md` - API reference
+
+## Guidelines
+- Leverage serena and sequential thinking to tackle complex tasks step by step. When you fix an issue, first think harder about it to find the root cause and produce supporting evidence, rather than just guessing. Additionally, when implementation is required, consider at least two potential solutions and analyze their pros and cons. Embrace Test-Driven Development (TDD) whenever possible.
+
+## Plan and review
+- Before you begin, MUST view files in .agent/sessions/context_session_x.md to get the full context (x being the id of the session we are operate, if file  doesn't exist, then create one).
+- context_session_x.md should contain most of context of what we did, overall plan and agents will continously add context to the file.
+- Whenever you have assumptions, you should ask clarifying questions to make better decisions.
+- This plan should include:
+    - A clear, detailed breakdown of the implementation steps
+    - The reasoning behind your approach
+    - A list of specific tasks
+- Focus on a Minimum Viable Product (MVP) to avoid over-planning. Once the plan is ready, please ask me to review it. Do not proceed with implementation until I have approved the plan.
+
+- After you finish the work, MUST update the .agent/sessions/context_session_x.md file to make sure others can get full context of what you did.
+- Agents (if used) will do research about the implementation, but you will do the actual implementation; when passing task to agent, make sure you pass the context file, e.g. '.agent/sessions/context_session_x.md'. After each agent finish the work, make sure you read the related documentation they created to get full context of the plan before you start executing
+
+## While implementing
+As you work, keep the plan updated. After you complete a task, append a detailed description of the changes you've made to the plan. This ensures that the progress and next steps are clear and can be easily handed over to other engineers if needed.
