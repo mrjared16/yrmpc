@@ -32,9 +32,9 @@ ListItemDisplay trait   →    Element tree → render_element()
 - `ListDisplayConfig` (`config/theme/mod.rs`)
 - Headers with distinct styling (bold yellow, separator lines)
 - Responsive fallback to compact mode (< 60 cols)
-
-### 🐛 Known Issues
-- **Thumbnail rendering**: Displays corner only, needs proper scaling fix
+- **Filter highlighting in rich mode** (blue text for matches)
+- **Header skip navigation** (`is_focusable()` trait method)
+- **Metadata display for browsables** (subtitle field)
 
 ### 📁 Key Files
 | File | Purpose |
