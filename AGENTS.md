@@ -18,13 +18,14 @@ cd rmpc && cargo build --release
 ## Current State
 
 | Feature | Status |
-|---------|--------|
+|---------|---------|
 | Search (all types) | ✅ |
 | Playback (MPV) | ✅ |
 | Queue management | ✅ |
 | MPRIS integration | ✅ |
 | Daemon mode | ✅ |
 | Autocomplete | ✅ |
+| **Rich List UI** | ✅ |
 
 ---
 
@@ -32,9 +33,15 @@ cd rmpc && cargo build --release
 
 | Priority | Task |
 |----------|------|
-| P1 | Rich List UI (thumbnail + 2-line) |
-| P1 | High CPU idle (needs profiling) |
-| P2 | API filtering (fetch only needed sections) |
+| P0 | Queue Playing Highlight (R-QUEUE-1) |
+| P1 | Thumbnail rendering fix |
+| P1 | Queue View Revamp (R-QUEUE-2/3) |
+| P1 | Artist/Playlist/Album Views (R-DETAIL) |
+| P1 | High CPU idle |
+| P2 | Prefetch (gapless playback) |
+| P3 | API filtering |
+
+> **Full spec:** [docs/ui-ux-provised.md](docs/ui-ux-provised.md)
 
 ---
 
@@ -48,6 +55,9 @@ cd rmpc && cargo build --release
 | Server | `player/youtube/server.rs` |
 | SearchItem types | `domain/search/` |
 | Config | `config/search.rs` |
+| **Rich List Widget** | `ui/widgets/item_list.rs` |
+| **Display Trait** | `domain/display.rs` |
+| **Element Tree** | `ui/widgets/element.rs` |
 
 ---
 
@@ -58,6 +68,7 @@ cd rmpc && cargo build --release
 3. `docs/ARCHITECTURE.md` - System design
 4. `docs/FEATURES.md` - UX roadmap
 5. `docs/YOUTUBE_API.md` - API reference
+6. `docs/ADR-rich-list-ui.md` - Rich List UI architecture (if working on UI)
 
 ## Guidelines
 - Leverage serena and sequential thinking to tackle complex tasks step by step. When you fix an issue, first think harder about it to find the root cause and produce supporting evidence, rather than just guessing. Additionally, when implementation is required, consider at least two potential solutions and analyze their pros and cons. Embrace Test-Driven Development (TDD) whenever possible.

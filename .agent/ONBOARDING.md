@@ -1,7 +1,7 @@
 # Agent Onboarding Guide: yrmpc (YouTube Music TUI)
 
-**Last Updated**: Dec 2, 2024  
-**Status**: ✅ Backend complete, E2E tests improved, repository clean
+**Last Updated**: Dec 8, 2024  
+**Status**: ✅ Rich List UI complete, backend stable, E2E tests passing
 
 ## Current Reality (Dec 2024)
 
@@ -70,16 +70,24 @@
 ### 6. YouTube API Details
 - [`docs/YOUTUBE_API.md`](file:///home/phucdnt/workspace/projects/yrmpc/docs/YOUTUBE_API.md) - YouTube Music API, browseId, gotchas, ytmapi-rs usage
 
+### 7. Rich List UI Architecture (NEW)
+- [`docs/ADR-rich-list-ui.md`](file:///home/phucdnt/workspace/projects/yrmpc/docs/ADR-rich-list-ui.md) - Architecture decision record, key files, known issues
+- [`docs/ui-ux-provised.md`](file:///home/phucdnt/workspace/projects/yrmpc/docs/ui-ux-provised.md) - Full UI/UX specification
+
 ---
 
 ## Current Implementation Status
 
 ### ✅ Completed
+- **Rich List UI** (thumbnail + 2-line layout, configurable)
 - Basic search (songs, albums, artists, playlists)
 - MPV integration (headless audio playback)
 - YouTube Music API integration (ytmapi-rs)
 - HTTP 400 sticker bug fix
 - YouTube API browse methods (playlist, album, artist)
+
+### 🚧 In Progress
+- **Thumbnail rendering fix** (displays corner only)
 
 ### 🚧 In Progress (Phase 1)
 - **Interactive search results** (PRIORITY 1)

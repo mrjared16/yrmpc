@@ -366,51 +366,73 @@ Protocols render to fixed rectangular regions, NOT inline with text.
 
 ---
 
-## 7. Implementation Reference
+## 7. Implementation Architecture (Approved)
 
-### 7.1 Rich List Pattern
+> **See also:** [ADR-rich-list-ui.md](ADR-rich-list-ui.md) for decision rationale.
+
+### 7.1 Hybrid Design: Simple API + Internal Element Tree
+
+```
+PUBLIC API                    INTERNAL
+┌──────────────────┐          ┌────────────────────────────────┐
+│ ListItemDisplay  │          │ Element::Row([                 │
+│ trait            │────────► │   Image(thumb),                │
+│ • primary_text() │          │   Column([title, subtitle]),   │
+│ • thumbnail_url()│          │   Text(duration)               │
+└──────────────────┘          │ ])                             │
+                              └────────────────────────────────┘
+```
+
+### 7.2 ListItemDisplay Trait (Public)
 
 ```rust
-for (idx, item) in visible_items.iter().enumerate() {
-    let row_rect = Rect { y: base_y + (idx * 2), height: 2, .. };
-    
-    let [thumb_rect, text_rect] = Layout::horizontal([
-        Constraint::Length(4), Constraint::Min(0)
-    ]).areas(row_rect);
-    
-    // Thumbnail
-    if let Some(url) = item.thumbnail() {
-        frame.render_widget(AsyncImage::new(&ctx.image_cache, url), thumb_rect);
-    }
-    
-    // 2-line text
-    frame.render_widget(Text::from(vec![
-        Line::from(format!("{} {}", item.icon(), item.title())),
-        Line::styled(item.metadata_line(), dim_style),
-    ]), text_rect);
+pub trait ListItemDisplay {
+    fn primary_text(&self) -> Cow<str>;
+    fn secondary_text(&self) -> Option<Cow<str>> { None }
+    fn thumbnail_url(&self) -> Option<&str> { None }
+    fn type_icon(&self) -> &str { "" }
+    fn duration_text(&self) -> Option<Cow<str>> { None }
 }
 ```
 
-### 7.2 Why NOT Table Widget
+### 7.3 Element Enum (Internal)
 
-`Table` → `Row` → `Cell` → **only Text**. Cannot embed `AsyncImage` in cells.
-**Solution:** Custom row rendering with `Layout::horizontal`.
+```rust
+/// Internal - not public API
+enum Element<'a> {
+    Text { content: Cow<'a, str>, style: Style },
+    Image { url: Option<String>, width: u16, height: u16 },
+    Icon { char: char, style: Style },
+    Row { children: Vec<Element<'a>>, gap: u16 },
+    Column { children: Vec<Element<'a>> },
+    Spacer,
+}
+```
 
-### 7.3 Configuration Schema
+### 7.4 Why NOT Table/List Widget
 
-```toml
-[theme.rich_list]
-enabled = false          # Default: classic single-line
-thumbnail_width = 4      # Character cells
-row_height = 2           # Lines per item
-show_icons = true
+`Table` → `Row` → `Cell` → **only Text**. Cannot embed `AsyncImage` in cells.  
+`List` → `ListItem` → **only Text**. Same limitation.
 
-[theme.symbols]
-song = "🎵"
-artist = "🎤"
-album = "💿"
-playlist = "📁"
-video = "🎬"
+**Solution:** Element tree with custom `render_element()` that handles Image + Text composition.
+
+### 7.5 Configuration Schema
+
+```ron
+theme: (
+    list_display: (
+        mode: "compact",       // "compact" | "rich"
+        thumbnail_width: 4,
+        row_height: 2,
+    ),
+    symbols: (
+        song: "🎵",
+        artist: "🎤",
+        album: "💿",
+        playlist: "📁",
+        video: "🎬",
+    ),
+)
 ```
 
 ---
@@ -433,8 +455,12 @@ video = "🎬"
 
 ## 9. Open Questions
 
-1. **Thumbnail size:** Is 4x2 cells enough for recognition?
-2. **Scroll virtualization:** Needed for performance?
-3. **Fallback display:** Icon when no thumbnail?
-4. **Grid view:** Album grid for browsing?
-5. **Shuffle/Repeat indicators:** Where to show state?
+### Resolved ✅
+1. **Thumbnail size:** 4x2 cells for MVP, configurable via `thumbnail_width`
+2. **Fallback display:** Type icon (🎵/🎤/💿) when thumbnail fails
+3. **Architecture:** Hybrid design - simple `ListItemDisplay` API + internal Element tree
+
+### Remaining
+1. **Scroll virtualization:** Profile first, optimize if needed
+2. **Grid view:** Future Phase 3, reuses same Element system
+3. **Shuffle/Repeat indicators:** Status bar (existing)

@@ -9,6 +9,7 @@
 
 | Feature | Status |
 |---------|--------|
+| **Rich List UI** | ✅ |
 | Search Display Refactor | ✅ |
 | Configurable Section Order | ✅ |
 | TopResult Support | ✅ |
@@ -29,35 +30,50 @@
 ### Known Issues
 | Issue | Priority | Notes |
 |-------|----------|-------|
+| Thumbnail renders corner only | P1 | Element sizing issue |
 | High CPU idle | P1 | Needs profiling |
 | Slow cold start | P2 | First search takes ~3s |
 
 ---
 
-## Next Tasks: Rich UI
+## Backlog (Prioritized)
 
-> **Spec:** See [docs/ui-ux-provised.md](docs/ui-ux-provised.md) for full UI/UX specification.
+> **UI/UX Spec:** See [docs/ui-ux-provised.md](docs/ui-ux-provised.md) for full specification.
+> **Architecture:** See [docs/ADR-rich-list-ui.md](docs/ADR-rich-list-ui.md) for Rich List implementation.
 
-| ID | Task | Priority | Description |
-|----|------|----------|-------------|
-| R-RICH-1 | Rich List Component | P1 | Thumbnail + 2-line layout per item |
-| R-RICH-2 | Adaptive Behavior | P2 | Graceful degradation on narrow terminals |
-| R-SEARCH-2 | Preview Panel Thumbnail | P2 | Show cover in preview column |
-| R-QUEUE-1 | Playing Highlight | P0 | Bold + ▶ icon for current track |
+### P0 - Critical
+| Task | Description |
+|------|-------------|
+| Queue Playing Highlight | R-QUEUE-1: Bold + ▶ icon for current track |
 
----
+### P1 - High Priority
+| Task | Description |
+|------|-------------|
+| **Thumbnail Rendering Fix** | Displays corner only, need proper scaling |
+| **Queue View Revamp** | R-QUEUE-2/3: Rich mode thumbnail per-row, reorder, remove |
+| **Search Preview Thumbnail** | R-SEARCH-2: Show cover in preview column |
+| **Artist View** | R-DETAIL-1/2: Sectioned layout with top songs, albums |
+| **Playlist/Album Detail** | R-DETAIL-1/2: Play All, navigation back |
+| High CPU Idle | Profiling needed |
 
-## Backlog
+### P2 - Medium Priority
+| Task | Description |
+|------|-------------|
+| Prefetch | Buffer next tracks for gapless playback |
+| Now Playing View | R-NOW-1/2/3: Large album art, progress bar, controls |
+| Repeat/Shuffle | Queue playback modes |
+| Play Next/Last | Queue position control (Shift+Enter) |
 
-| Priority | Task | Description |
-|----------|------|-------------|
-| P1 | Rich List UI | Thumbnail + 2-line items (opt-in) |
-| P1 | High CPU Idle | Profiling needed |
-| P2 | API Filtering | Fetch only needed sections |
-| P2 | Repeat/Shuffle | Queue playback modes |
-| P2 | Play Next/Last | Queue position control |
-| P3 | Prefetch | Buffer next tracks |
-| P3 | Grid View | Album grid for browsing |
+### P3 - Low Priority
+| Task | Description |
+|------|-------------|
+| API Filtering | Fetch only needed sections |
+| Grid View | Album grid for browsing |
+
+### P4 - Future
+| Task | Description |
+|------|-------------|
+| Unit Tests: Rich List | Tests for `ListItemDisplay`, `ItemListWidget` |
 
 ---
 
