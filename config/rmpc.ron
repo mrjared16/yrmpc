@@ -11,7 +11,8 @@
     search: (
         sections: ["top_results", "songs", "artists", "albums", "playlists"],
     ),
-    theme: Some("default"),
+    // Theme file with rich list UI enabled
+    theme: Some("rich_test"),
     tabs: [
         (
             name: "Search",
