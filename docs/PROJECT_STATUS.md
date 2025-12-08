@@ -63,6 +63,7 @@
 | R-NOW-1 | Now Playing View | Large album art (existing `album_art.rs`) |
 | R-NOW-2/3 | Playback Controls | Keyboard controls + progress bar |
 | R-SEARCH-3 | Play vs Add | Enter=play, Shift+Enter=add to queue |
+| - | Metadata Consistency | Fix case mismatch in Song.album() - see [backlog doc](backlog-metadata-consistency.md) |
 | - | Prefetch | Buffer next tracks for gapless playback |
 
 ### P3 - Low Priority
