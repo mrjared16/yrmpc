@@ -34,10 +34,10 @@ cd rmpc && cargo build --release
 | Priority | Task |
 |----------|------|
 | P0 | Queue Playing Highlight (R-QUEUE-1) |
-| P1 | Thumbnail rendering fix |
 | P1 | Queue View Revamp (R-QUEUE-2/3) |
 | P1 | Artist/Playlist/Album Views (R-DETAIL) |
 | P1 | High CPU idle |
+| P2 | Grid View (see [grid-layout-design.md](docs/grid-layout-design.md)) |
 | P2 | Prefetch (gapless playback) |
 | P3 | API filtering |
 
@@ -58,6 +58,8 @@ cd rmpc && cargo build --release
 | **Rich List Widget** | `ui/widgets/item_list.rs` |
 | **Display Trait** | `domain/display.rs` |
 | **Element Tree** | `ui/widgets/element.rs` |
+| **Dir Navigation** | `ui/dirstack/dir.rs` |
+| **DirStackItem Trait** | `ui/dirstack/mod.rs` |
 
 ---
 

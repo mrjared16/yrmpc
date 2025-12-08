@@ -5,11 +5,21 @@
 
 ---
 
-## Recent Completions
+## Recent Completions (This Session)
 
 | Feature | Status |
 |---------|--------|
-| **Rich List UI** | ✅ |
+| **Header Skip Navigation** | ✅ j/k skips unfocusable headers |
+| **Metadata Display (Browsables)** | ✅ Artist subscribers, album year, playlist track count |
+| **Filter Highlighting (Rich Mode)** | ✅ Blue text for matched items |
+| **Rich Preview Panel** | ✅ Search preview uses rich mode |
+| **is_focusable() Trait** | ✅ Added to ListItemDisplay and DirStackItem |
+
+## Previously Completed
+
+| Feature | Status |
+|---------|--------|
+| Rich List UI | ✅ |
 | Search Display Refactor | ✅ |
 | Configurable Section Order | ✅ |
 | TopResult Support | ✅ |
@@ -18,62 +28,63 @@
 
 ---
 
-## Current State
+## Known Issues
 
-### Working ✅
-- Search with all content types (songs, artists, albums, playlists)
-- Playback via MPV with streaming URLs
-- Queue management (add, remove, play next/last)
-- MPRIS integration
-- Daemon mode with systemd
-
-### Known Issues
 | Issue | Priority | Notes |
 |-------|----------|-------|
-| Thumbnail renders corner only | P1 | Element sizing issue |
 | High CPU idle | P1 | Needs profiling |
-| Slow cold start | P2 | First search takes ~3s |
+| Slow cold start | P2 | First search ~3s |
 
 ---
 
 ## Backlog (Prioritized)
 
-> **UI/UX Spec:** See [docs/ui-ux-provised.md](docs/ui-ux-provised.md) for full specification.
-> **Architecture:** See [docs/ADR-rich-list-ui.md](docs/ADR-rich-list-ui.md) for Rich List implementation.
+> **Full UI/UX Spec:** [ui-ux-provised.md](ui-ux-provised.md) (contains detailed layouts and reasoning)  
+> **Grid Design:** [grid-layout-design.md](grid-layout-design.md)  
+> **Rich List ADR:** [ADR-rich-list-ui.md](ADR-rich-list-ui.md)
 
 ### P0 - Critical
-| Task | Description |
-|------|-------------|
-| Queue Playing Highlight | R-QUEUE-1: Bold + ▶ icon for current track |
+| REQ | Task | Implementation |
+|-----|------|----------------|
+| R-QUEUE-1 | Queue Playing Highlight | Use `ListItemDisplay.is_playing()` → Bold + ▶ icon |
 
 ### P1 - High Priority
-| Task | Description |
-|------|-------------|
-| **Thumbnail Rendering Fix** | Displays corner only, need proper scaling |
-| **Queue View Revamp** | R-QUEUE-2/3: Rich mode thumbnail per-row, reorder, remove |
-| **Search Preview Thumbnail** | R-SEARCH-2: Show cover in preview column |
-| **Artist View** | R-DETAIL-1/2: Sectioned layout with top songs, albums |
-| **Playlist/Album Detail** | R-DETAIL-1/2: Play All, navigation back |
-| High CPU Idle | Profiling needed |
+| REQ | Task | Implementation |
+|-----|------|----------------|
+| R-QUEUE-2 | Queue View Revamp | Apply **Rich List UI** (`ItemListWidget`) to QueuePane |
+| R-QUEUE-3 | Queue Manipulation | Remove (d/x), reorder via keyboard |
+| R-DETAIL-1 | Artist/Album Detail | **Rich List** for songs + **Grid** for albums (needs P3) |
+| R-DETAIL-2 | Back Navigation | Backspace/Esc returns to previous view |
+| - | High CPU Idle Fix | Profiling and optimization |
 
 ### P2 - Medium Priority
-| Task | Description |
-|------|-------------|
-| Prefetch | Buffer next tracks for gapless playback |
-| Now Playing View | R-NOW-1/2/3: Large album art, progress bar, controls |
-| Repeat/Shuffle | Queue playback modes |
-| Play Next/Last | Queue position control (Shift+Enter) |
+| REQ | Task | Implementation |
+|-----|------|----------------|
+| R-NOW-1 | Now Playing View | Large album art (existing `album_art.rs`) |
+| R-NOW-2/3 | Playback Controls | Keyboard controls + progress bar |
+| R-SEARCH-3 | Play vs Add | Enter=play, Shift+Enter=add to queue |
+| - | Prefetch | Buffer next tracks for gapless playback |
 
 ### P3 - Low Priority
-| Task | Description |
-|------|-------------|
-| API Filtering | Fetch only needed sections |
-| Grid View | Album grid for browsing |
+| REQ | Task | Implementation |
+|-----|------|----------------|
+| - | Grid View | Implement `ListRenderMode::Grid` per [design doc](grid-layout-design.md) |
+| - | API Filtering | Fetch only displayed sections |
+
+### ✅ Completed (This Session)
+| REQ | Task |
+|-----|------|
+| R-SEARCH-1 | Content type distinction (icons, colors) |
+| R-SEARCH-2 | Preview panel with rich mode |
+| - | Filter highlighting in rich mode |
+| - | Header skip navigation (`is_focusable()`) |
+| - | Metadata display for browsables (subtitle) |
 
 ### P4 - Future
-| Task | Description |
-|------|-------------|
-| Unit Tests: Rich List | Tests for `ListItemDisplay`, `ItemListWidget` |
+| Task | Notes |
+|------|-------|
+| Unit Tests | Tests for `ListItemDisplay`, `ItemListWidget` |
+| R-MODAL-1/2 | Modal system (add to playlist, confirm) |
 
 ---
 
