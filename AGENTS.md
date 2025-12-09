@@ -1,12 +1,13 @@
 # LLM Agent Guidelines - yrmpc
 
 **Project**: YouTube Music TUI Client (Rust + Ratatui)  
-**Updated**: 2025-12-08  
+**Updated**: 2025-12-10  
 **Status**: ✅ Core Playable - Daily Use
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
+
 ```bash
 cd rmpc && cargo build --release
 ./restart_daemon.sh
@@ -15,78 +16,120 @@ cd rmpc && cargo build --release
 
 ---
 
-## Current State
+## 📋 Task Management (backlog.md CLI)
+
+> ⚠️ **CRITICAL**: This project uses `backlog` CLI for task management. **Do NOT edit task files directly.**
+
+### View Tasks
+```bash
+backlog task list --plain           # List all tasks
+backlog task 1 --plain              # View specific task
+backlog search "queue" --plain      # Search tasks
+```
+
+### Work on a Task
+```bash
+# 1. Assign and start
+backlog task edit <id> -s "In Progress" -a @agent
+
+# 2. Add implementation plan
+backlog task edit <id> --plan "1. Research\n2. Implement\n3. Test"
+
+# 3. After coding, mark AC complete
+backlog task edit <id> --check-ac 1 --check-ac 2
+
+# 4. Add notes and complete
+backlog task edit <id> --notes "Implemented X"
+backlog task edit <id> -s Done
+```
+
+> **Full guide**: [BACKLOG_INSTRUCTIONS.md](BACKLOG_INSTRUCTIONS.md)
+
+---
+
+## 📖 Documentation Index
+
+| Purpose | File |
+|---------|------|
+| **This file** | Entry point for LLM agents |
+| Task management | [BACKLOG_INSTRUCTIONS.md](BACKLOG_INSTRUCTIONS.md) |
+| Project overview | [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| UI/UX spec | [docs/ui-ux-provised.md](docs/ui-ux-provised.md) |
+| Rich List UI | [docs/ADR-rich-list-ui.md](docs/ADR-rich-list-ui.md) |
+| YouTube API | [docs/YOUTUBE_API.md](docs/YOUTUBE_API.md) |
+| Current status | [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) |
+
+---
+
+## 🎯 Current State
 
 | Feature | Status |
-|---------|---------|
+|---------|--------|
 | Search (all types) | ✅ |
 | Playback (MPV) | ✅ |
 | Queue management | ✅ |
 | MPRIS integration | ✅ |
 | Daemon mode | ✅ |
-| Autocomplete | ✅ |
-| **Rich List UI** | ✅ |
+| Rich List UI | ✅ |
 
 ---
 
-## Next Priorities
+## 📁 Key Files
 
-| Priority | Task |
-|----------|------|
-| P0 | Queue Playing Highlight (R-QUEUE-1) |
-| P1 | Queue View Revamp (R-QUEUE-2/3) |
-| P1 | Artist/Playlist/Album Views (R-DETAIL) |
-| P1 | High CPU idle |
-| P2 | Grid View (see [grid-layout-design.md](docs/grid-layout-design.md)) |
-| P2 | Prefetch (gapless playback) |
-| P3 | API filtering |
-
-> **Full spec:** [docs/ui-ux-provised.md](docs/ui-ux-provised.md)
-
----
-
-## Key Files
-
-| Purpose | File |
+| Purpose | Path |
 |---------|------|
-| Search API | `player/youtube/api.rs` |
-| Protocol | `player/youtube/protocol.rs` |
-| Client | `player/youtube/client.rs` |
-| Server | `player/youtube/server.rs` |
-| SearchItem types | `domain/search/` |
-| Config | `config/search.rs` |
-| **Rich List Widget** | `ui/widgets/item_list.rs` |
-| **Display Trait** | `domain/display.rs` |
-| **Element Tree** | `ui/widgets/element.rs` |
-| **Dir Navigation** | `ui/dirstack/dir.rs` |
-| **DirStackItem Trait** | `ui/dirstack/mod.rs` |
+| YouTube API | `rmpc/src/player/youtube/api.rs` |
+| Protocol | `rmpc/src/player/youtube/protocol.rs` |
+| Rich List Widget | `rmpc/src/ui/widgets/item_list.rs` |
+| Display Trait | `rmpc/src/domain/display.rs` |
+| Search Pane | `rmpc/src/ui/panes/search/mod.rs` |
+| Queue Pane | `rmpc/src/ui/panes/queue.rs` |
 
 ---
 
-## Read Order for New LLM
+## ⚡ Session Workflow
 
-1. This file (`AGENTS.md`)
-2. `LLM_ONBOARDING.md` - Research insights
-3. `docs/ARCHITECTURE.md` - System design
-4. `docs/FEATURES.md` - UX roadmap
-5. `docs/YOUTUBE_API.md` - API reference
-6. `docs/ADR-rich-list-ui.md` - Rich List UI architecture (if working on UI)
+### Starting a Session
 
-## Guidelines
-- Leverage serena and sequential thinking to tackle complex tasks step by step. When you fix an issue, first think harder about it to find the root cause and produce supporting evidence, rather than just guessing. Additionally, when implementation is required, consider at least two potential solutions and analyze their pros and cons. Embrace Test-Driven Development (TDD) whenever possible.
+1. **Check backlog**: `backlog task list --plain`
+2. **Pick a task** or discuss with user
+3. **Claim it**: `backlog task edit <id> -s "In Progress" -a @agent`
+4. **Add plan**: `backlog task edit <id> --plan "..."`
+5. **Get approval** before coding
 
-## Plan and review
-- Before you begin, MUST view files in .agent/sessions/context_session_x.md to get the full context (x being the id of the session we are operate, if file  doesn't exist, then create one).
-- context_session_x.md should contain most of context of what we did, overall plan and agents will continously add context to the file.
-- Whenever you have assumptions, you should ask clarifying questions to make better decisions.
-- This plan should include:
-    - A clear, detailed breakdown of the implementation steps
-    - The reasoning behind your approach
-    - A list of specific tasks
-- Focus on a Minimum Viable Product (MVP) to avoid over-planning. Once the plan is ready, please ask me to review it. Do not proceed with implementation until I have approved the plan.
+### During Implementation
 
-- After you finish the work, MUST update the .agent/sessions/context_session_x.md file to make sure others can get full context of what you did.
-- Agents (if used) will do research about the implementation, but you will do the actual implementation; when passing task to agent, make sure you pass the context file, e.g. '.agent/sessions/context_session_x.md'. After each agent finish the work, make sure you read the related documentation they created to get full context of the plan before you start executing
+- Update AC as you complete: `backlog task edit <id> --check-ac 1`
+- Append notes: `backlog task edit <id> --append-notes "Progress..."`
 
-## While implementing
-As you work, keep the plan updated. After you complete a task, append a detailed description of the changes you've made to the plan. This ensures that the progress and next steps are clear and can be easily handed over to other engineers if needed.
+### Finishing
+
+1. Check all AC: `backlog task <id> --plain`
+2. Add final notes
+3. Mark done: `backlog task edit <id> -s Done`
+
+---
+
+## 🧠 Guidelines
+
+- **Think first**: Use sequential thinking for complex problems
+- **Research before fixing**: Find root cause, don't guess
+- **TDD when possible**: Tests prove correctness
+- **Ask questions**: Clarify assumptions with user
+- **Document changes**: Update session context files
+
+---
+
+## ⚠️ Critical Rules
+
+### NEVER
+- Edit backlog task files directly (use CLI only)
+- Download entire playlists (stream only)
+- Break vim-style keyboard navigation
+
+### ALWAYS
+- Use `--plain` flag when viewing backlog tasks
+- Test with real YouTube content
+- Update task AC as you complete them
+- Keep user informed of blockers
