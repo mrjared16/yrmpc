@@ -443,8 +443,8 @@ theme: (
 |----|-------------|----------|--------|
 | R-SEARCH-1 | Visual type distinction in search | P0 | Designed |
 | R-SEARCH-2 | Preview panel thumbnail | P1 | Designed |
-| R-QUEUE-1 | Highlight currently playing | P0 | Existing |
-| R-QUEUE-2 | Keyboard queue manipulation | P1 | Existing |
+| R-QUEUE-1 | Highlight currently playing | P0 | ✅ Implemented (InteractiveListView) |
+| R-QUEUE-2 | Keyboard queue manipulation | P1 | ✅ Implemented (QueuePaneV2) |
 | R-NOW-1 | Album art in now playing | P0 | Existing |
 | R-DETAIL-1 | Play All for containers | P1 | Designed |
 | R-COMPAT-1 | Original UI as default | P0 | Designed |

@@ -13,6 +13,14 @@
 **...change search UI**
 → `rmpc/src/ui/panes/search/mod.rs`
 
+**...change queue UI**
+→ `rmpc/src/ui/panes/queue_pane_v2.rs` (QueuePaneV2)
+→ `rmpc/src/ui/modals/queue_modal.rs` (QueueModal)
+
+**...create reusable list components**
+→ `rmpc/src/ui/widgets/interactive_list_view.rs` (generic list)
+→ `rmpc/src/ui/widgets/item_list.rs` (rich item rendering)
+
 **...fix IPC protocol**
 → `rmpc/src/player/youtube/protocol.rs`
 
