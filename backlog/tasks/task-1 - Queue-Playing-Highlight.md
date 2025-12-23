@@ -1,10 +1,10 @@
 ---
 id: task-1
 title: Queue Playing Highlight
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-09 21:20'
-updated_date: '2025-12-09 21:36'
+updated_date: '2025-12-10 23:44'
 labels:
   - ui
   - queue
@@ -29,7 +29,13 @@ R-QUEUE-1: Show which song is currently playing in queue with bold + ▶ icon.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Add is_playing() to ListItemDisplay trait
-- [ ] #2 Queue view renders playing track with bold + ▶ icon
-- [ ] #3 Currently playing track visually distinct
+- [x] #1 Add is_playing() to ListItemDisplay trait
+- [x] #2 Queue view renders playing track with bold + ▶ icon
+- [x] #3 Currently playing track visually distinct
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Completed via InteractiveListView highlight callback. is_playing() in ListItemDisplay, queue renders with highlight via callback function.
+<!-- SECTION:NOTES:END -->

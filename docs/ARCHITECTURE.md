@@ -17,16 +17,26 @@ yrmpc/
 ```
 rmpc/
 ├── src/
+│   ├── core/
+│   │   ├── client.rs             # ⚠️ Client thread system (idle/request)
+│   │   ├── event_loop.rs         # Main UI event loop
+│   │   ├── work.rs               # Background work thread
+│   │   └── input.rs              # Terminal input handling
 │   ├── player/
+│   │   ├── youtube/
+│   │   │   ├── client.rs         # YouTubeClient IPC
+│   │   │   ├── server.rs         # YouTube daemon server
+│   │   │   └── services/         # Playback, Queue services
+│   │   ├── mpv_ipc.rs            # MPV JSON-IPC client
 │   │   ├── youtube_backend.rs    # YouTube Music implementation
-│   │   └── client.rs              # Backend abstraction
+│   │   └── client.rs             # Backend abstraction
 │   ├── ui/
 │   │   ├── panes/
-│   │   │   ├── search/            # Search UI
-│   │   │   ├── artists/           # Artist browsing
-│   │   │   ├── albums/            # Album browsing
-│   │   │   └── playlists/         # Playlist browsing
-│   │   └── mod.rs                 # UI event handlers
+│   │   │   ├── search/           # Search UI
+│   │   │   ├── artists/          # Artist browsing
+│   │   │   ├── albums/           # Album browsing
+│   │   │   └── playlists/        # Playlist browsing
+│   │   └── mod.rs                # UI event handlers
 │   └── main.rs
 ├── tests/
 │   └── youtube_search_integration_tests.rs
@@ -59,6 +69,62 @@ youtui/ytmapi-rs/
 - **API encapsulation**: Hides YouTube Music internals
 - **Version pinning**: Project controls which API version to use
 - **Upstream tracking**: Can update library independently
+
+---
+
+## Client Thread Architecture (core/client.rs)
+
+> ⚠️ **CRITICAL**: Read this before modifying `core/client.rs` or `player/youtube/client.rs`
+
+### Thread Model
+
+The TUI spawns client threads to communicate with the backend:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     main.rs                                  │
+│                        │                                     │
+│         core::client::init(client_rx, event_tx, client)     │
+│                        │                                     │
+│                        ▼                                     │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                  client_task()                       │    │
+│  │                                                      │    │
+│  │  ┌──────────────┐            ┌───────────────┐      │    │
+│  │  │  idle thread │◄── client ─►│ request thread│      │    │
+│  │  │              │  (passed    │               │      │    │
+│  │  │ - enter_idle │   via       │ - recv request│      │    │
+│  │  │ - read_resp  │  channels)  │ - send noidle │      │    │
+│  │  │ - send events│            │ - process req │      │    │
+│  │  └──────────────┘            └───────────────┘      │    │
+│  │                                                      │    │
+│  │  Channels:                                           │    │
+│  │  - client_return_{tx,rx}: passes Client between     │    │
+│  │  - client_received_{tx,rx}: sync signals            │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### MPD vs YouTube Backend Behavior
+
+| Aspect | MPD Backend | YouTube Backend |
+|--------|-------------|-----------------|
+| `enter_idle()` | Sends IDLE command to server | No-op |
+| `read_response()` | **Blocks** on socket for events | Sleeps 1s, returns timeout |
+| Idle events | Server pushes: player, playlist | Not used - MPV event loop |
+| Thread purpose | Essential | **Vestigial** (code sharing) |
+
+### CPU Spin Bug (Fixed in task-6)
+
+**Problem**: For YouTube backend, `read_response()` was returning `Ok(vec![])` immediately, causing the idle/request threads to spin in a tight loop (146% CPU).
+
+**Fix**: `read_response()` now sleeps 1 second and returns `MpdError::TimedOut`.
+
+**Proper Solution** (TODO - task-20): Skip client threads for YouTube backend entirely.
+
+**DO NOT REVERT**: If you revert this fix, CPU usage will spike to 146%. If search is broken, fix search - don't undo the CPU fix. See `.agent/session-2025-12-17-cpu-fix.md`.
+
+---
 
 ## Data Flow
 

@@ -1,103 +1,214 @@
 # Project Status
 
-**Last Updated**: 2025-12-08  
-**Status**: ✅ Core Playable - Daily Use
+**Last Updated**: 2025-12-17
+**Status**: ✅ Core Playable - Hybrid Queue Architecture Complete
 
 ---
 
-## Recent Completions (This Session)
+## Current State
 
-| Feature | Status |
-|---------|--------|
-| **Header Skip Navigation** | ✅ j/k skips unfocusable headers |
-| **Metadata Display (Browsables)** | ✅ Artist subscribers, album year, playlist track count |
-| **Filter Highlighting (Rich Mode)** | ✅ Blue text for matched items |
-| **Rich Preview Panel** | ✅ Search preview uses rich mode |
-| **is_focusable() Trait** | ✅ Added to ListItemDisplay and DirStackItem |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Auto-Advance | ✅ Complete | Rolling prefetch window enables seamless playback |
+| Repeat Mode | ✅ Complete | Off, One (loop track), All (loop queue) |
+| Shuffle Mode | ✅ Complete | History-based random selection |
+| MPV Event Loop | ✅ Complete | observe_property for playlist-pos, pause, end-file |
+| Queue Update Fix (task-18) | ✅ Complete | Result-type driven updates |
+| Search Enter Key (task-19) | ✅ Complete | YouTube Music-like behavior |
+| **CPU Idle Fix (task-6)** | ✅ Complete | **0% CPU when idle (was 146%)** |
+| Build | ✅ Passing | Only pre-existing warnings |
+| Manual Testing | 🔄 Pending | Needs verification |
 
-## Previously Completed
+---
 
-| Feature | Status |
-|---------|--------|
-| Rich List UI | ✅ |
-| Search Display Refactor | ✅ |
-| Configurable Section Order | ✅ |
-| TopResult Support | ✅ |
-| Autocomplete Suggestions | ✅ |
-| Daemon Architecture | ✅ |
+## Recent Completions (2025-12-17 Session)
+
+### High CPU Idle Fix (task-6)
+
+**Root Cause Identified via Per-Thread Profiling:**
+- `idle` thread: 77.7% CPU
+- `request` thread: 68.4% CPU
+- Total: ~146% CPU
+
+**Problem:** The `idle` and `request` threads in `core/client.rs` were designed for MPD's blocking idle protocol. For YouTube backend, `YouTubeClient::read_response()` returned `Ok(vec![])` immediately without blocking, causing both threads to spin in a tight loop.
+
+**Fix Applied:**
+1. `src/player/youtube/client.rs:175-191` - Changed `read_response()` to sleep for 1 second and return `MpdError::TimedOut`
+2. `src/player/mpv_ipc.rs:232-265` - Changed `read_event()` to return `Option<MpvEvent>` instead of spinning
+
+**Result:** 0.0% CPU when idle (verified with per-thread profiling)
+
+---
+
+## Recent Completions (2025-12-16 Session)
+
+| Feature | Description |
+|---------|-------------|
+| **MPV Event Loop** | Background thread observes MPV properties, reacts to changes |
+| **Rolling Prefetch Window** | MPV playlist holds 2-3 resolved URLs for auto-advance |
+| **Repeat Mode** | RepeatMode enum: Off, One, All - fully wired through protocol |
+| **Shuffle Mode** | History-based shuffle, "previous" navigates back through history |
+| **Status with Options** | StatusData now includes repeat/shuffle state for UI |
+
+### Architecture Changes
+
+| Old | New | Reason |
+|-----|-----|--------|
+| `loadfile replace` | `playlist_clear + append × 3` | Enables auto-advance |
+| No MPV events | `observe_property` + event loop | React instead of poll |
+| Eager URL resolve | Lazy on play | Eliminates 6s delay on add |
+| Stub repeat/shuffle | Full implementation | User-requested features |
+
+---
+
+## Architecture Decisions
+
+| ADR | Description |
+|-----|-------------|
+| [ADR-query-result-state-updates](ADR-query-result-state-updates.md) | Result type determines state updates |
+| [ADR-rich-list-ui](ADR-rich-list-ui.md) | Rich list rendering |
+| [ADR-interactive-layout-system](ADR-interactive-layout-system.md) | Interactive layouts |
 
 ---
 
 ## Known Issues
 
-| Issue | Priority | Notes |
-|-------|----------|-------|
-| High CPU idle | P1 | Needs profiling |
-| Slow cold start | P2 | First search ~3s |
+| Issue | Priority | Status |
+|-------|----------|--------|
+| Manual testing needed | P0 | 🔄 Next step |
+| ~~High CPU on client (task-6)~~ | ~~P1~~ | ✅ Fixed 2025-12-17 |
+| Test infrastructure broken | P3 | Pre-existing, not from our changes |
+
+---
+
+## Manual Test Plan (Hybrid Queue)
+
+### Prerequisites
+```bash
+# Start fresh daemon
+pkill -f "rmpc.*daemon" || true
+./restart_daemon.sh
+
+# Run client with debug logging
+RUST_LOG=debug ./rmpc/target/debug/rmpc --config config/rmpc.ron 2>&1 | tee debug.log
+```
+
+### Test 1: Auto-Advance
+1. Clear queue (if any songs present)
+2. Search for an artist with multiple short songs
+3. Add 3+ songs to queue
+4. Play the first song
+5. **Expected**: After song 1 finishes, song 2 starts automatically
+6. **Check log**: "MPV event: TrackChanged"
+
+### Test 2: Repeat One
+1. With a song playing, toggle Repeat (should show "Repeat" active in status bar)
+2. If single mode available, enable Single (Repeat One = repeat + single)
+3. Wait for song to finish
+4. **Expected**: Same song starts again from beginning
+5. **Check log**: "Repeat One: replaying current track"
+
+### Test 3: Repeat All
+1. Ensure only Repeat is on (not Single)
+2. Skip to last song in queue
+3. Wait for it to finish
+4. **Expected**: Playback loops back to first song
+5. **Check log**: "Repeat All: looping back to start"
+
+### Test 4: Shuffle Mode
+1. Add 5+ songs to queue
+2. Toggle Shuffle (Random) on
+3. Press Next multiple times
+4. **Expected**: Songs play in random order, not sequential
+5. Press Previous
+6. **Expected**: Goes back to previously played song (history navigation)
+
+### Test 5: UI Status Sync
+1. Toggle Repeat on/off
+2. **Expected**: Status bar shows Repeat icon state correctly
+3. Toggle Shuffle on/off
+4. **Expected**: Status bar shows Random icon state correctly
 
 ---
 
 ## Backlog (Prioritized)
 
-> **Full UI/UX Spec:** [ui-ux-provised.md](ui-ux-provised.md) (contains detailed layouts and reasoning)  
-> **Grid Design:** [grid-layout-design.md](grid-layout-design.md)  
-> **Rich List ADR:** [ADR-rich-list-ui.md](ADR-rich-list-ui.md)
-
-### P0 - Critical
-| REQ | Task | Implementation |
-|-----|------|----------------|
-| R-QUEUE-1 | Queue Playing Highlight | Use `ListItemDisplay.is_playing()` → Bold + ▶ icon |
+### P0 - Immediate
+- [ ] Manual test hybrid queue features (above)
 
 ### P1 - High Priority
-| REQ | Task | Implementation |
-|-----|------|----------------|
-| R-QUEUE-2 | Queue View Revamp | Apply **Rich List UI** (`ItemListWidget`) to QueuePane |
-| R-QUEUE-3 | Queue Manipulation | Remove (d/x), reorder via keyboard |
-| R-DETAIL-1 | Artist/Album Detail | **Rich List** for songs + **Grid** for albums (needs P3) |
-| R-DETAIL-2 | Back Navigation | Backspace/Esc returns to previous view |
-| - | High CPU Idle Fix | Profiling and optimization |
+- [ ] Queue Manipulation UI (remove, reorder with keyboard)
+- [ ] High CPU on client fix (task-6)
 
 ### P2 - Medium Priority
-| REQ | Task | Implementation |
-|-----|------|----------------|
-| R-NOW-1 | Now Playing View | Large album art (existing `album_art.rs`) |
-| R-NOW-2/3 | Playback Controls | Keyboard controls + progress bar |
-| R-SEARCH-3 | Play vs Add | Enter=play, Shift+Enter=add to queue |
-| - | Metadata Consistency | Fix case mismatch in Song.album() - see [backlog doc](backlog-metadata-consistency.md) |
-| - | Prefetch | Buffer next tracks for gapless playback |
+- [ ] Gapless playback optimization
+- [ ] Now Playing view
 
 ### P3 - Low Priority
-| REQ | Task | Implementation |
-|-----|------|----------------|
-| - | Grid View | Implement `ListRenderMode::Grid` per [design doc](grid-layout-design.md) |
-| - | API Filtering | Fetch only displayed sections |
-
-### ✅ Completed (This Session)
-| REQ | Task |
-|-----|------|
-| R-SEARCH-1 | Content type distinction (icons, colors) |
-| R-SEARCH-2 | Preview panel with rich mode |
-| - | Filter highlighting in rich mode |
-| - | Header skip navigation (`is_focusable()`) |
-| - | Metadata display for browsables (subtitle) |
-
-### P4 - Future
-| Task | Notes |
-|------|-------|
-| Unit Tests | Tests for `ListItemDisplay`, `ItemListWidget` |
-| R-MODAL-1/2 | Modal system (add to playlist, confirm) |
+- [ ] Fix test infrastructure
+- [ ] Grid view implementation
 
 ---
 
 ## Quick Commands
 
 ```bash
-# Rebuild
+# Build
 cd rmpc && cargo build --release
 
-# Restart daemon  
-./restart_daemon.sh
+# Run with debug
+RUST_LOG=debug ./rmpc/target/release/rmpc --config config/rmpc.ron
 
-# Run client
-./rmpc/target/release/rmpc --config config/rmpc.ron
+# Check daemon logs
+tail -f ~/.local/share/rmpc/daemon.log
+
+# Kill stuck daemon
+pkill -f "rmpc.*daemon"
 ```
+
+---
+
+## Session Handoff
+
+**Latest Session**: `.agent/session-2025-12-16-hybrid-queue.md` (MUST READ)
+
+### What Was Implemented (2025-12-16)
+
+**Problem**: YouTube backend couldn't auto-advance, repeat, or shuffle - songs stopped after each track.
+
+**Solution**: Hybrid Queue Architecture
+1. **MPV Event Loop** - Background thread observes MPV properties
+2. **Rolling Prefetch** - MPV playlist has 2-3 URLs (not 1), enabling auto-advance
+3. **RepeatMode enum** - Off, One, All with proper `handle_track_ended()` logic
+4. **Shuffle with History** - Random selection + history stack for "previous"
+
+### Key Files Modified (2025-12-16)
+
+| File | Changes |
+|------|---------|
+| `rmpc/src/player/mpv_ipc.rs` | MpvEvent enum, observe_property, read_event |
+| `rmpc/src/player/youtube/services/queue_service.rs` | RepeatMode, shuffle history |
+| `rmpc/src/player/youtube/services/playback_service.rs` | start_event_loop |
+| `rmpc/src/player/youtube/protocol.rs` | SetRepeat, SetShuffle, StatusData fields |
+| `rmpc/src/player/youtube/server.rs` | handle_track_ended, rolling prefetch |
+| `rmpc/src/player/youtube/client.rs` | repeat(), random() implementation |
+
+### Immediate Next Steps
+
+1. **Manual Test**: Run app, test keybindings (z=repeat, v=single, x=shuffle)
+2. **Verify**: Auto-advance works, repeat modes work, shuffle works
+3. **If bugs found**: Check logs for "TrackChanged", "Repeat", "end-file"
+4. **Commit**: If working, commit with message about hybrid queue architecture
+
+### Testing Commands
+```bash
+# Rebuild and restart
+cd /home/phucdnt/workspace/projects/yrmpc/rmpc && cargo build
+cd /home/phucdnt/workspace/projects/yrmpc && ./restart_daemon.sh
+
+# Run with debug
+RUST_LOG=debug ./rmpc/target/debug/rmpc --config config/rmpc.ron 2>&1 | tee debug.log
+```
+
+### Serena Memory
+New memory created: `hybrid_queue_architecture` - read this for architecture details
