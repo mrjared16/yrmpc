@@ -11,231 +11,410 @@ yrmpc/
 └── docs/           # This documentation
 ```
 
-**Purpose**: Project root, configuration, authentication files
-
 ### Submodule: rmpc
 ```
 rmpc/
 ├── src/
-│   ├── core/
-│   │   ├── client.rs             # ⚠️ Client thread system (idle/request)
-│   │   ├── event_loop.rs         # Main UI event loop
-│   │   ├── work.rs               # Background work thread
-│   │   └── input.rs              # Terminal input handling
-│   ├── player/
-│   │   ├── youtube/
-│   │   │   ├── client.rs         # YouTubeClient IPC
-│   │   │   ├── server.rs         # YouTube daemon server
-│   │   │   └── services/         # Playback, Queue services
-│   │   ├── mpv_ipc.rs            # MPV JSON-IPC client
-│   │   ├── youtube_backend.rs    # YouTube Music implementation
-│   │   └── client.rs             # Backend abstraction
+│   ├── backends/                 # Backend API layer
+│   │   ├── api/                  # Universal traits (Discovery, Queue, Playback, Volume)
+│   │   ├── mpd/                  # MPD implementation
+│   │   ├── youtube/              # YouTube implementation (daemon + client)
+│   │   ├── client.rs             # BackendDispatcher
+│   │   └── traits.rs             # Legacy MusicBackend (deprecated)
+│   ├── domain/
+│   │   ├── content.rs            # ContentDetails (Album, Artist, Playlist)
+│   │   ├── display.rs            # ListItemDisplay trait
+│   │   └── song.rs               # Universal Song type
 │   ├── ui/
 │   │   ├── panes/
-│   │   │   ├── search/           # Search UI
-│   │   │   ├── artists/          # Artist browsing
-│   │   │   ├── albums/           # Album browsing
-│   │   │   └── playlists/        # Playlist browsing
-│   │   └── mod.rs                # UI event handlers
+│   │   │   ├── search/           # SearchPaneV1 (legacy)
+│   │   │   ├── search_pane_v2.rs # SearchPaneV2 (new architecture)
+│   │   │   ├── queue.rs          # QueuePane
+│   │   │   └── mod.rs            # Pane container
+│   │   ├── widgets/
+│   │   │   ├── interactive_list_view.rs  # Vim-style list controls
+│   │   │   ├── list_view_state.rs        # Selection, marks, scroll
+│   │   │   ├── filter_state.rs           # Text filtering
+│   │   │   └── nav_stack.rs              # Navigation stack (was browse_stack)
+│   │   ├── dirstack/             # Legacy DirStack (MPD file navigation)
+│   │   └── mod.rs                # Ui struct, UiAppEvent handling
 │   └── main.rs
-├── tests/
-│   └── youtube_search_integration_tests.rs
-└── youtui/         # Nested submodule → ytmapi-rs
+└── tests/
 ```
-
-**Purpose**: Main application, UI, YouTube backend
-
-### Nested Submodule: youtui (ytmapi-rs)
-```
-youtui/ytmapi-rs/
-├── src/
-│   ├── auth/       # YouTube authentication
-│   ├── query/      # Search, browse queries
-│   └── parse/      # JSON response parsing
-```
-
-**Purpose**: YouTube Music API client library
-
-## Why This Structure?
-
-### Submodule: rmpc
-- **Fork of upstream**: Original `rmpc` is MPD-only
-- **Custom changes**: Added YouTube backend, modified UI
-- **Independent updates**: Can pull upstream MPD fixes without conflicts
-- **Separation of concerns**: Application vs project config
-
-### Nested Submodule: youtui
-- **Shared library**: Used by multiple projects
-- **API encapsulation**: Hides YouTube Music internals
-- **Version pinning**: Project controls which API version to use
-- **Upstream tracking**: Can update library independently
 
 ---
 
-## Client Thread Architecture (core/client.rs)
+## Universal Streaming Architecture
 
-> ⚠️ **CRITICAL**: Read this before modifying `core/client.rs` or `player/youtube/client.rs`
+> **Status**: In Development
+> **Goal**: Unified navigation across any streaming source (YouTube, Spotify, etc.)
+
+### Complete Component Connection Map
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    BACKEND LAYER                                        │
+│                                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐    │
+│  │                          api::* Traits (NEW)                                    │    │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │    │
+│  │  │ api::Playback │  │ api::Queue   │  │api::Discovery│  │ api::Volume  │         │    │
+│  │  │ play()       │  │ add()        │  │ search()     │  │ set_volume() │         │    │
+│  │  │ pause()      │  │ remove()     │  │ browse()     │  └──────────────┘         │    │
+│  │  │ next()       │  │ list()       │  │ details() ◄──── Returns ContentDetails   │    │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                           │    │
+│  └────────────────────────────────────────────┬────────────────────────────────────┘    │
+│                                               │                                         │
+│  ┌────────────────────────────────────────────▼────────────────────────────────────┐    │
+│  │                         BackendDispatcher (client.rs)                           │    │
+│  │  ┌──────────────────────┐              ┌──────────────────────┐                 │    │
+│  │  │    YouTubeProxy      │              │     MpdBackend       │                 │    │
+│  │  │ impl api::Discovery  │              │ impl api::Discovery  │                 │    │
+│  │  │ impl api::Queue      │              │ impl api::Queue      │                 │    │
+│  │  │ impl api::Playback   │              │ impl api::Playback   │                 │    │
+│  │  └──────────────────────┘              └──────────────────────┘                 │    │
+│  └─────────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────────────────┐    │
+│  │                    MusicBackend / QueueOperations (DEPRECATED)                  │    │
+│  │                    Legacy traits - being replaced by api::* traits              │    │
+│  └─────────────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                         │
+└───────────────────────────────────────────────┬─────────────────────────────────────────┘
+                                                │
+                                                │ Returns domain types
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    DOMAIN LAYER                                         │
+│                                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              Core Types                                           │  │
+│  │                                                                                   │  │
+│  │  ┌──────────────┐    ┌──────────────────────────────────────────────────────┐     │  │
+│  │  │    Song      │    │              ContentDetails                          │     │  │
+│  │  │ • id         │    │  ┌──────────────┬──────────────┬──────────────────┐  │     │  │
+│  │  │ • title      │    │  │AlbumContent  │ArtistContent │ PlaylistContent  │  │     │  │
+│  │  │ • artist     │    │  │ • tracks     │ • top_songs  │ • tracks         │  │     │  │
+│  │  │ • album      │    │  │ • artist     │ • albums     │ • author         │  │     │  │
+│  │  │ • uri        │    │  │ • year       │ • singles    │ • related        │  │     │  │
+│  │  │ • duration   │    │  │ • extensions │ • extensions │ • extensions     │  │     │  │
+│  │  └──────────────┘    │  └──────────────┴──────────────┴──────────────────┘  │     │  │
+│  │         │            └──────────────────────────────────────────────────────┘     │  │
+│  │         │                                    │                                    │  │
+│  │         └────────────────┬───────────────────┘                                    │  │
+│  │                          │                                                        │  │
+│  │                          ▼                                                        │  │
+│  │  ┌───────────────────────────────────────────────────────────────────────────┐    │  │
+│  │  │                       ListItemDisplay Trait                               │    │  │
+│  │  │  Unified rendering interface - anything can be displayed in a list       │    │  │
+│  │  │  • primary_text() -> Cow<str>                                             │    │  │
+│  │  │  • secondary_text() -> Option<Cow<str>>                                   │    │  │
+│  │  │  • type_icon() -> &str                                                    │    │  │
+│  │  │  • is_focusable() -> bool                                                 │    │  │
+│  │  │  • is_playing() -> bool                                                   │    │  │
+│  │  └───────────────────────────────────────────────────────────────────────────┘    │  │
+│  │                          ▲                                                        │  │
+│  │                          │ impl                                                   │  │
+│  │  ┌───────────────────────┴───────────────────────────────────────────────────┐    │  │
+│  │  │  Song    ContentRef    DirOrSong    SearchResult    (future: DetailItem) │    │  │
+│  │  └───────────────────────────────────────────────────────────────────────────┘    │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                         │
+└───────────────────────────────────────────────┬─────────────────────────────────────────┘
+                                                │
+                                                │ Used by
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                  VIEW STATE LAYER                                       │
+│                                                                                         │
+│   LEGACY (DirStack family)              NEW (NavStack family)                           │
+│   For MPD file browser                  For streaming navigation                        │
+│                                                                                         │
+│   ┌───────────────────────────────┐     ┌───────────────────────────────────┐           │
+│   │ DirStack<T, S>                │     │ NavStack<T> (was BrowseStack)     │           │
+│   │ • HashMap<Path, Dir>          │     │ • Vec<NavLevel<T>>                │           │
+│   │ • path-based lookup           │     │ • stack-based push/pop            │           │
+│   └───────────────┬───────────────┘     └───────────────┬───────────────────┘           │
+│                   │                                     │                               │
+│                   ▼                                     ▼                               │
+│   ┌───────────────────────────────┐     ┌───────────────────────────────────┐           │
+│   │ Dir<T, S>                     │     │ NavLevel<T> (was BrowseLevel)     │           │
+│   │ • items: Vec<T>               │     │ • items: Vec<T>                   │           │
+│   │ • state: DirState             │     │ • view: InteractiveListView ◄──┐  │           │
+│   │ • filter (EMBEDDED)           │     │ • path_segment: String        │  │           │
+│   └───────────────┬───────────────┘     └────────────────────────────────│──┘           │
+│                   │                                                      │              │
+│                   ▼                                    ┌─────────────────┘              │
+│   ┌───────────────────────────────┐                    │                                │
+│   │ DirState<S>                   │                    ▼                                │
+│   │ • selected: Option<usize>     │     ┌───────────────────────────────────┐           │
+│   │ • marked: BTreeSet<usize>     │     │ InteractiveListView (SHARED)      │           │
+│   │ • scrollbar                   │     │                                   │           │
+│   │ • filter (here too)           │     │ Vim-style controls for ANY list:  │           │
+│   └───────────────────────────────┘     │ • j/k navigation                  │           │
+│                                         │ • G/gg first/last                 │           │
+│   Used by:                              │ • Space mark                      │           │
+│   • LibraryPane                         │ • / filter                        │           │
+│   • ArtistPane (legacy MPD)             │ • n/N next/prev match             │           │
+│   • AlbumsPane (legacy MPD)             │                                   │           │
+│   • DirectoriesPane                     │  ┌─────────────────────────────┐  │           │
+│                                         │  │ ListViewState               │  │           │
+│                                         │  │ • selected                  │  │           │
+│                                         │  │ • marked: BTreeSet          │  │           │
+│                                         │  │ • scrollbar                 │  │           │
+│                                         │  └─────────────────────────────┘  │           │
+│                                         │  ┌─────────────────────────────┐  │           │
+│                                         │  │ FilterState (COMPOSABLE)    │  │           │
+│                                         │  │ • filter_text               │  │           │
+│                                         │  │ • matched_indices           │  │           │
+│                                         │  │ • current_match             │  │           │
+│                                         │  └─────────────────────────────┘  │           │
+│                                         └───────────────────────────────────┘           │
+│                                                                                         │
+│                                         Used by:                                        │
+│                                         • SearchPaneV2                                  │
+│                                         • QueuePane                                     │
+│                                         • FUTURE: DetailStack                           │
+│                                                                                         │
+└───────────────────────────────────────────────┬─────────────────────────────────────────┘
+                                                │
+                                                │ Used by
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    UI PANE LAYER                                        │
+│                                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              Existing Panes                                       │  │
+│  │                                                                                   │  │
+│  │  ┌────────────────────┐   ┌────────────────────┐   ┌────────────────────────────┐ │  │
+│  │  │ SearchPaneV1       │   │ SearchPaneV2       │   │ QueuePane                  │ │  │
+│  │  │ (Legacy)           │   │ (New)              │   │                            │ │  │
+│  │  │                    │   │                    │   │                            │ │  │
+│  │  │ Uses:              │   │ Uses:              │   │ Uses:                      │ │  │
+│  │  │ • Dir<Song>        │   │ • NavStack<Song>   │   │ • InteractiveListView      │ │  │
+│  │  │ • DirState         │   │ • InteractiveList  │   │ • ListViewState            │ │  │
+│  │  │ • Manual filter    │   │   View             │   │                            │ │  │
+│  │  │                    │   │ • FilterState      │   │ Can navigate to:           │ │  │
+│  │  │ ~2000 lines        │   │   (NOT WIRED!)     │   │ • Artist (via UiAppEvent)  │ │  │
+│  │  │                    │   │                    │   │ • Album (via UiAppEvent)   │ │  │
+│  │  │                    │   │ ~500 lines         │   │                            │ │  │
+│  │  └────────────────────┘   └────────────────────┘   └────────────────────────────┘ │  │
+│  │                                                                                   │  │
+│  │  ┌────────────────────┐   ┌────────────────────┐   ┌────────────────────────────┐ │  │
+│  │  │ LibraryPane        │   │ ArtistPane (MPD)   │   │ AlbumsPane (MPD)           │ │  │
+│  │  │ (Legacy)           │   │ (Legacy)           │   │ (Legacy)                   │ │  │
+│  │  │                    │   │                    │   │                            │ │  │
+│  │  │ Uses:              │   │ Uses:              │   │ Uses:                      │ │  │
+│  │  │ • DirStack         │   │ • DirStack         │   │ • DirStack                 │ │  │
+│  │  │ • BrowserPane trait│   │ • BrowserPane      │   │ • BrowserPane              │ │  │
+│  │  └────────────────────┘   └────────────────────┘   └────────────────────────────┘ │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                           FUTURE: Detail Views                                    │  │
+│  │                                                                                   │  │
+│  │  ┌────────────────────────────────────────────────────────────────────────────┐   │  │
+│  │  │                           DetailStack (NEW)                                │   │  │
+│  │  │  Composable component - embeds into ANY pane                               │   │  │
+│  │  │                                                                            │   │  │
+│  │  │  SearchPaneV2 + DetailStack:                                               │   │  │
+│  │  │  ┌──────────────────────────────────────────────────────────────────────┐  │   │  │
+│  │  │  │ if detail_stack.is_active():                                         │  │   │  │
+│  │  │  │   render DetailView (artist/album/playlist)                          │  │   │  │
+│  │  │  │ else:                                                                │  │   │  │
+│  │  │  │   render normal search results                                       │  │   │  │
+│  │  │  └──────────────────────────────────────────────────────────────────────┘  │   │  │
+│  │  │                                                                            │   │  │
+│  │  │  DetailStack internals:                                                    │   │  │
+│  │  │  ├── views: Vec<DetailView>                                                │   │  │
+│  │  │  ├── breadcrumb: Vec<String>   # ["Search", "KIMLONG", "bittersweet"]      │   │  │
+│  │  │  │                                                                         │   │  │
+│  │  │  └── DetailView                                                            │   │  │
+│  │  │      ├── content: ContentDetails (from api::Discovery::details())          │   │  │
+│  │  │      ├── flat_items: Vec<DetailItem>  (flattened sections)                 │   │  │
+│  │  │      ├── view: InteractiveListView  ◄── REUSES same component!             │   │  │
+│  │  │      └── load_state: LoadState                                             │   │  │
+│  │  │                                                                            │   │  │
+│  │  │  DetailItem enum:                                                          │   │  │
+│  │  │  ├── Header { title } ← non-focusable section header                       │   │  │
+│  │  │  ├── Song(Song) ← playable, impl ListItemDisplay                           │   │  │
+│  │  │  └── Ref(ContentRef) ← navigable, impl ListItemDisplay + Navigable         │   │  │
+│  │  │                                                                            │   │  │
+│  │  └────────────────────────────────────────────────────────────────────────────┘   │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                         │
+└───────────────────────────────────────────────┬─────────────────────────────────────────┘
+                                                │
+                                                │ Communicates via
+                                                ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                                  EVENT LAYER                                            │
+│                                                                                         │
+│  ┌───────────────────────────────────────────────────────────────────────────────────┐  │
+│  │                              UiAppEvent                                           │  │
+│  │                                                                                   │  │
+│  │  enum UiAppEvent {                                                                │  │
+│  │      // Existing                                                                  │  │
+│  │      Modal(Box<dyn Modal>),                                                       │  │
+│  │      PopModal(Id),                                                                │  │
+│  │      ChangeTab(String),                                                           │  │
+│  │      Redraw,                                                                      │  │
+│  │                                                                                   │  │
+│  │      // Legacy (keep for compatibility)                                           │  │
+│  │      OpenAlbum(String),   ← Current: hacks into AlbumsPane                        │  │
+│  │      OpenArtist(String),  ← Current: hacks into ArtistsPane                       │  │
+│  │      OpenPlaylist(String),← Current: hacks into PlaylistsPane                     │  │
+│  │                                                                                   │  │
+│  │      // NEW (proposed)                                                            │  │
+│  │      NavigateTo { id: String, kind: ContentKind },                                │  │
+│  │          │                                                                        │  │
+│  │          └──► Handler:                                                            │  │
+│  │              1. Close modal if active                                             │  │
+│  │              2. Find pane that can show content                                   │  │
+│  │              3. Call api::Discovery::details(id, kind)                            │  │
+│  │              4. Push to pane's DetailStack                                        │  │
+│  │  }                                                                                │  │
+│  │                                                                                   │  │
+│  │  Emitted by:                                                                      │  │
+│  │  • Any pane via ctx.app_event_sender.send(AppEvent::UiEvent(...))                 │  │
+│  │  • Modal queue when navigating to artist                                          │  │
+│  │                                                                                   │  │
+│  │  Handled by:                                                                      │  │
+│  │  • Ui::on_ui_app_event() in ui/mod.rs                                             │  │
+│  └───────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                         │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component Reuse Matrix
+
+| Component | SearchV1 | SearchV2 | QueuePane | Legacy MPD | Future Detail |
+|-----------|----------|----------|-----------|------------|---------------|
+| `DirStack` | ❌ | ❌ | ❌ | ✅ | ❌ |
+| `Dir` | ✅ partial | ❌ | ❌ | ✅ | ❌ |
+| `DirState` | ✅ partial | ❌ | ❌ | ✅ | ❌ |
+| `NavStack` | ❌ | ✅ | ❌ | ❌ | ✅ **via NavStack<DetailItem>** |
+| `NavLevel` | ❌ | ✅ | ❌ | ❌ | ✅ |
+| `InteractiveListView` | ❌ | ✅ | ✅ | ❌ | ✅ **REUSE** |
+| `ListViewState` | ❌ | ✅ | ✅ | ❌ | ✅ **REUSE** |
+| `FilterState` | embedded | ✅ (not wired) | ❌ | ❌ | ✅ **REUSE** |
+| `ListItemDisplay` | ❌ | ✅ | ✅ | ❌ | ✅ **REUSE** |
+| `DetailItem` | ❌ | ✅ **NEW** | ❌ | ❌ | ✅ **NEW** |
+| `ContentDetails` | ❌ | ✅ **via flatten** | ❌ | ❌ | ✅ |
+| `DetailStack` | ❌ | ❌ | ❌ | ❌ | ✅ **READY** |
+
+---
+
+## Data Flow Example: Search → Artist → Album
+
+```
+User types "KIMLONG" in SearchPaneV2
+                │
+                ▼
+ctx.query() → api::Discovery::search("KIMLONG")
+Returns: Vec<Song> (mixed: songs, albums, artists with uri like "artist:...")
+                │
+                ▼
+NavStack Level 0: Search Results
+┌────────────────────────────────────────────────────────────────────────┐
+│ [🎵] ngày dài vắng em (Song)                                           │
+│ [🎤] KIMLONG (Artist) ◄─── User presses Enter                          │
+│ [💿] bittersweet (Album)                                               │
+└────────────────────────────────────────────────────────────────────────┘
+                │
+                ▼
+api::Discovery::details(Item::Artist("UC..."))
+Returns: ContentDetails::Artist(ArtistContent {
+    id: "UC...",
+    name: "KIMLONG",
+    top_songs: Vec<Song>,
+    extensions: { Albums: [...], Singles: [...], Related: [...] }
+})
+                │
+                ▼
+DetailStack.push(ArtistContent)
+  1. Flatten content into DetailItem list:
+     ┌─────────────────────────────────────────────────────────────────────┐
+     │ Header("Top Songs")           ← non-focusable                       │
+     │ Song(ngày dài vắng em)        ← focusable, playable                 │
+     │ Song(bitter)                  ← focusable, playable                 │
+     │ Header("Albums")              ← non-focusable                       │
+     │ Ref(bittersweet, Album)       ← focusable, navigable ◄── Enter      │
+     │ Ref(Panorama, Album)          ← focusable, navigable                │
+     │ Header("Fans also like")      ← non-focusable                       │
+     │ Ref(Obito, Artist)            ← focusable, navigable                │
+     └─────────────────────────────────────────────────────────────────────┘
+  
+  2. Create InteractiveListView for this DetailView
+     - All vim controls work (j/k, G/gg, Space, /)
+     - j/k skips headers automatically (is_focusable() = false)
+  
+  3. Add breadcrumb: ["KIMLONG"]
+                │
+                │ User presses Enter on "bittersweet" album
+                ▼
+api::Discovery::details(Item::Album("MPR..."))
+Returns: ContentDetails::Album(AlbumContent { ... })
+                │
+                ▼
+DetailStack.push(AlbumContent)
+  Breadcrumb: ["KIMLONG", "bittersweet"]
+  Flat items: [Header("Tracks"), Song(1), Song(2), ..., Header("More by KIMLONG"), ...]
+```
+
+---
+
+## Implementation Plan
+
+| Phase | Task | Files | Status |
+|-------|------|-------|--------|
+| **0** | Rename `BrowseStack` → `NavStack`, fix V2 filter | `nav_stack.rs`, `search_pane_v2.rs` | ✅ Done |
+| **1** | Create `LoadState` enum | In `detail_stack.rs` | ✅ Done |
+| **2** | Create `DetailItem` + `ListItemDisplay` impl | `domain/detail_item.rs` | ✅ Done |
+| **3** | Create `Navigable` trait | Replaced with `is_navigable()` method | ✅ Done |
+| **4** | Create `DetailView` struct | In `detail_stack.rs` | ✅ Done |
+| **5** | Create `DetailStack` with push/pop/render | `ui/widgets/detail_stack.rs` | ✅ Done |
+| **6** | Implement `flatten_content()` | In `detail_stack.rs` | ✅ Done |
+| **7** | Add `UiAppEvent::NavigateTo` | `ui/mod.rs` | 🔄 Pending |
+| **8** | Implement handler in `Ui::on_ui_app_event` | `ui/mod.rs` | 🔄 Pending |
+| **9** | Integrate `DetailItem` into `SearchPaneV2` | `search_pane_v2.rs` | ✅ Done (via NavStack<DetailItem>) |
+| **10** | Add breadcrumb to pane title | `search_pane_v2.rs` | ✅ Done (via NavStack.path()) |
+| **11** | Integrate `DetailStack` into `QueuePane` | `queue.rs` | 🔄 Pending |
+| **12** | Handle modal queue → main UI navigation | `ui/mod.rs` | 🔄 Pending |
+
+**Progress: 8/12 phases complete**
+
+### Architecture Notes
+
+**Simplification from original plan:**
+- Phases 2-6 were consolidated: `DetailItem` is in domain layer, `DetailStack` + `flatten_content` are in view layer
+- `Navigable` trait replaced with `DetailItem::is_navigable()` method (simpler, YAGNI)
+- SearchPaneV2 uses `NavStack<DetailItem>` directly instead of separate DetailStack embedding
+
+---
+
+## Future Extensibility (Backlog)
+
+These features require NO breaking changes to the architecture above:
+
+| Feature | How to Add | Priority |
+|---------|------------|----------|
+| **Presets** | Add `preset: Option<String>` to `DetailView`, change `flatten_content()` | Low |
+| **Grid layout** | Add `layout: LayoutKind` to sections, branch in `render()` | Low |
+| **Tab between sections** | Replace `flat_items` with `sections: Vec<SectionView>` | Low |
+| **More backends** | Implement `api::*` traits for Spotify/SoundCloud | Medium |
+
+---
+
+## Legacy Reference
 
 ### Thread Model
+See `core/client.rs` for the client thread system (idle/request pattern).
 
-The TUI spawns client threads to communicate with the backend:
+### Authentication
+Cookie-based via `cookies.txt` and `BrowserToken`. No OAuth.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     main.rs                                  │
-│                        │                                     │
-│         core::client::init(client_rx, event_tx, client)     │
-│                        │                                     │
-│                        ▼                                     │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                  client_task()                       │    │
-│  │                                                      │    │
-│  │  ┌──────────────┐            ┌───────────────┐      │    │
-│  │  │  idle thread │◄── client ─►│ request thread│      │    │
-│  │  │              │  (passed    │               │      │    │
-│  │  │ - enter_idle │   via       │ - recv request│      │    │
-│  │  │ - read_resp  │  channels)  │ - send noidle │      │    │
-│  │  │ - send events│            │ - process req │      │    │
-│  │  └──────────────┘            └───────────────┘      │    │
-│  │                                                      │    │
-│  │  Channels:                                           │    │
-│  │  - client_return_{tx,rx}: passes Client between     │    │
-│  │  - client_received_{tx,rx}: sync signals            │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### MPD vs YouTube Backend Behavior
-
-| Aspect | MPD Backend | YouTube Backend |
-|--------|-------------|-----------------|
-| `enter_idle()` | Sends IDLE command to server | No-op |
-| `read_response()` | **Blocks** on socket for events | Sleeps 1s, returns timeout |
-| Idle events | Server pushes: player, playlist | Not used - MPV event loop |
-| Thread purpose | Essential | **Vestigial** (code sharing) |
-
-### CPU Spin Bug (Fixed in task-6)
-
-**Problem**: For YouTube backend, `read_response()` was returning `Ok(vec![])` immediately, causing the idle/request threads to spin in a tight loop (146% CPU).
-
-**Fix**: `read_response()` now sleeps 1 second and returns `MpdError::TimedOut`.
-
-**Proper Solution** (TODO - task-20): Skip client threads for YouTube backend entirely.
-
-**DO NOT REVERT**: If you revert this fix, CPU usage will spike to 146%. If search is broken, fix search - don't undo the CPU fix. See `.agent/session-2025-12-17-cpu-fix.md`.
-
----
-
-## Data Flow
-
-```
-User Input → TUI (ratatui)
-           → UI Event Handler
-           → Backend (YouTubeBackend)
-           → ytmapi-rs (API calls)
-           → YouTube Music API
-           → Parse response
-           → MPV (playback) or UI (navigation)
-```
-
-### Search Flow Example
-```
-1. User types "/son tung mtp" <Enter>
-2. SearchPane → UiAppEvent::Search
-3. YouTubeBackend::search()
-4. ytmapi-rs::SearchQuery → YouTube API
-5. Parse SearchResults (artists, albums, songs)
-6. Map to Song objects with metadata
-7. Display in SearchPane
-8. User selects → Navigate or Play
-```
-
-## Key Components
-
-### Backend Abstraction (`player/client.rs`)
-```rust
-enum Client {
-    Mpd(MpdClient),
-    Mpv(MpvClient),
-    YouTube(YouTubeBackend),
-}
-```
-Unified interface for different music sources.
-
-### YouTube Backend (`player/youtube_backend.rs`)
-- **Authentication**: Cookie-based via `BrowserToken`
-- **Search**: General search returning all content types
-- **Browse**: Artist/album/playlist detail pages
-- **Playback**: MPV spawning and control
-
-### UI Event System (`ui/mod.rs`)
-```rust
-enum UiAppEvent {
-    OpenAlbum(String),   // Navigate to album via ID
-    OpenArtist(String),  // Navigate to artist via ID
-    OpenPlaylist(String),// Navigate to playlist via ID
-}
-```
-Cross-pane navigation system.
-
-### SearchItem Architecture (`domain/search/`)
-Type-safe search results with nested enums:
-```rust
-pub enum SearchItem {
-    Playable(PlayableItem),   // Song, Video → can queue
-    Browsable(BrowsableItem), // Artist, Album, Playlist → opens detail
-    Header(String),           // UI section separator
-}
-```
-
-**Why nested?** Prevents LSP violations - Artist never reaches queue code.
-
-| Type | Enter | Queue (n/l) |
-|------|-------|-------------|
-| Song/Video | Play | ✅ Direct |
-| Album/Playlist | Browse | ✅ Fetch→Queue |
-| Artist | Browse | ❌ Type prevents |
-
-## Authentication Architecture
-
-### Cookie Flow
-```
-1. User exports cookies from browser (EditThisCookie extension)
-2. Saves to ~/.config/rmpc/cookie.txt (Netscape format)
-3. rmpc parses cookies
-4. Creates BrowserToken with SAPISID + SAPISIDHASH
-5. ytmapi-rs sends cookies with each API request
-```
-
-### Why Cookies (Not OAuth)?
-- **No token expiry**: Cookies last months
-- **No refresh logic**: Simpler implementation
-- **Browser parity**: Same auth as web client
-- **Headless friendly**: No interactive login needed
-
-## Build System
-
-### Cargo Workspace (rmpc)
-```toml
-[dependencies]
-ytmapi-rs = { path = "../youtui/ytmapi-rs" }
-rusty_ytdl = "..."  # YouTube video URL extraction
-ratatui = "..."     # TUI framework
-```
-
-### Feature Flags
-- `youtube` - Enable YouTube backend (always on for this fork)
-
-## Testing Strategy
-
-### Unit Tests
-- In-file `#[cfg(test)]` modules
-- Test ID formats, metadata parsing, enum handling
-
-### Integration Tests
-- `tests/youtube_search_integration_tests.rs`
-- Test search result structure, type detection
-
-### Manual Testing
-- tmux session with rmpc
-- Search, navigate, play workflow
+### Backend Abstraction
+`MusicBackend` trait is deprecated. Use `api::*` traits via `BackendDispatcher`.
