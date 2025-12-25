@@ -229,16 +229,21 @@ rmpc/
 │  │  │  ├── views: Vec<DetailView>                                                │   │  │
 │  │  │  ├── breadcrumb: Vec<String>   # ["Search", "KIMLONG", "bittersweet"]      │   │  │
 │  │  │  │                                                                         │   │  │
-│  │  │  └── DetailView                                                            │   │  │
-│  │  │      ├── content: ContentDetails (from api::Discovery::details())          │   │  │
-│  │  │      ├── flat_items: Vec<DetailItem>  (flattened sections)                 │   │  │
-│  │  │      ├── view: InteractiveListView  ◄── REUSES same component!             │   │  │
+│  │  │  └── DetailView (SECTIONED DESIGN - see below)                             │   │  │
+│  │  │      ├── content: ContentDetails (preserved for actions/refresh)          │   │  │
+│  │  │      ├── sections: Vec<SectionView>  ← STRUCTURE PRESERVED                 │   │  │
+│  │  │      ├── view: InteractiveListView   ← ONE view, flat navigation           │   │  │
 │  │  │      └── load_state: LoadState                                             │   │  │
 │  │  │                                                                            │   │  │
+│  │  │  SectionView (enables flexible layout):                                    │   │  │
+│  │  │  ├── key: SectionKey              ← for preset config lookup               │   │  │
+│  │  │  ├── title: String                ← section header text                    │   │  │
+│  │  │  ├── layout: LayoutKind           ← List | Grid { columns }                │   │  │
+│  │  │  └── items: Vec<DetailItem>       ← items in this section                  │   │  │
+│  │  │                                                                            │   │  │
 │  │  │  DetailItem enum:                                                          │   │  │
-│  │  │  ├── Header { title } ← non-focusable section header                       │   │  │
 │  │  │  ├── Song(Song) ← playable, impl ListItemDisplay                           │   │  │
-│  │  │  └── Ref(ContentRef) ← navigable, impl ListItemDisplay + Navigable         │   │  │
+│  │  │  └── Ref(ContentRef) ← navigable, impl ListItemDisplay                     │   │  │
 │  │  │                                                                            │   │  │
 │  │  └────────────────────────────────────────────────────────────────────────────┘   │  │
 │  └───────────────────────────────────────────────────────────────────────────────────┘  │
@@ -366,6 +371,86 @@ DetailStack.push(AlbumContent)
 
 ---
 
+## Sectioned DetailView Design
+
+> **Key Decision**: Preserve structure for future flexibility (grid layout, presets, collapsible sections)
+
+### Why Sectioned Instead of Flat?
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Flat** (`Vec<DetailItem>`) | Simple | Loses structure, can't do grid per section |
+| **Sectioned** (`Vec<SectionView>`) | Enables presets, grid, collapse | Slightly more complex |
+
+**Decision**: Use sectioned design. Navigation stays flat (one `InteractiveListView`), but rendering can vary per section.
+
+### Data Flow
+
+```
+ContentDetails ──► build_sections() ──► Vec<SectionView> ──► DetailView
+                   (preserves structure)                      │
+                                                              ├─► items() iterator for navigation
+                                                              └─► sections for rendering
+```
+
+### Types
+
+```rust
+pub enum LayoutKind {
+    List,                    // Default: vertical list
+    Grid { columns: u8 },    // Future: grid with N columns
+}
+
+pub struct SectionView {
+    pub key: SectionKey,     // For preset config lookup
+    pub title: String,       // Header text
+    pub layout: LayoutKind,  // Rendering hint
+    pub items: Vec<DetailItem>,
+}
+
+pub struct DetailView {
+    pub content: ContentDetails,    // Preserved for actions/refresh
+    pub sections: Vec<SectionView>, // Structured for flexible rendering
+    pub view: InteractiveListView,  // ONE view, flat navigation
+    pub load_state: LoadState,
+    pub title: String,
+}
+```
+
+### Navigation vs Rendering
+
+- **Navigation**: Flat. `j/k` moves through all items across all sections.
+- **Rendering**: Sectioned. Each section rendered with its own layout.
+
+```rust
+impl DetailView {
+    /// Flat iteration for navigation
+    pub fn items(&self) -> impl Iterator<Item = &DetailItem> {
+        self.sections.iter().flat_map(|s| s.items.iter())
+    }
+}
+```
+
+### Current vs Future Rendering
+
+```
+NOW (List only):                    FUTURE (Mixed layouts):
+┌────────────────────────┐          ┌────────────────────────┐
+│ ── Top Songs ────────  │          │ ▼ Top Songs            │
+│   🎵 Song 1            │          │   🎵 Song 1            │
+│   🎵 Song 2            │          │   🎵 Song 2            │
+│ ── Albums ───────────  │          ├────────────────────────┤
+│   💿 Album 1           │          │ ▼ Albums (Grid 3x)     │
+│   💿 Album 2           │          │ ┌──────┬──────┬──────┐ │
+│   💿 Album 3           │          │ │ A1   │ A2   │ A3   │ │
+│ ── Related ──────────  │          │ └──────┴──────┴──────┘ │
+│   🎤 Artist 1          │          ├────────────────────────┤
+└────────────────────────┘          │ ▶ Related (collapsed)  │
+                                    └────────────────────────┘
+```
+
+---
+
 ## Implementation Plan
 
 | Phase | Task | Files | Status |
@@ -374,36 +459,44 @@ DetailStack.push(AlbumContent)
 | **1** | Create `LoadState` enum | In `detail_stack.rs` | ✅ Done |
 | **2** | Create `DetailItem` + `ListItemDisplay` impl | `domain/detail_item.rs` | ✅ Done |
 | **3** | Create `Navigable` trait | Replaced with `is_navigable()` method | ✅ Done |
-| **4** | Create `DetailView` struct | In `detail_stack.rs` | ✅ Done |
-| **5** | Create `DetailStack` with push/pop/render | `ui/widgets/detail_stack.rs` | ✅ Done |
-| **6** | Implement `flatten_content()` | In `detail_stack.rs` | ✅ Done |
+| **4** | Create `SectionView` + `LayoutKind` | In `detail_stack.rs` | 🔄 In Progress |
+| **5** | Create `build_sections()` replacing `flatten_content()` | In `detail_stack.rs` | 🔄 In Progress |
+| **6** | Update `DetailView` to use `Vec<SectionView>` | In `detail_stack.rs` | 🔄 In Progress |
 | **7** | Add `UiAppEvent::NavigateTo` | `ui/mod.rs` | 🔄 Pending |
 | **8** | Implement handler in `Ui::on_ui_app_event` | `ui/mod.rs` | 🔄 Pending |
-| **9** | Integrate `DetailItem` into `SearchPaneV2` | `search_pane_v2.rs` | ✅ Done (via NavStack<DetailItem>) |
+| **9** | Integrate sectioned `DetailView` into `SearchPaneV2` | `search_pane_v2.rs` | 🔄 Pending |
 | **10** | Add breadcrumb to pane title | `search_pane_v2.rs` | ✅ Done (via NavStack.path()) |
 | **11** | Integrate `DetailStack` into `QueuePane` | `queue.rs` | 🔄 Pending |
 | **12** | Handle modal queue → main UI navigation | `ui/mod.rs` | 🔄 Pending |
 
-**Progress: 8/12 phases complete**
+**Progress: 4/12 phases complete, 3 in progress**
 
 ### Architecture Notes
 
-**Simplification from original plan:**
-- Phases 2-6 were consolidated: `DetailItem` is in domain layer, `DetailStack` + `flatten_content` are in view layer
-- `Navigable` trait replaced with `DetailItem::is_navigable()` method (simpler, YAGNI)
-- SearchPaneV2 uses `NavStack<DetailItem>` directly instead of separate DetailStack embedding
+**Sectioned Design Decision (2025-12-25):**
+
+The original plan used `flatten_content()` to convert `ContentDetails` → `Vec<DetailItem>`.
+This was changed to `build_sections()` → `Vec<SectionView>` for these reasons:
+
+1. **Preserves structure**: Sections remain distinct, enabling per-section layout
+2. **Future-proof**: Grid layout, presets, collapse can be added without redesign
+3. **No data loss**: Original `ContentDetails` kept for actions/refresh
+4. **Same navigation**: Still uses one `InteractiveListView` with flat item iteration
+
+**Key insight**: Navigation is flat (j/k through all items), rendering is sectioned (each section can have different layout).
 
 ---
 
 ## Future Extensibility (Backlog)
 
-These features require NO breaking changes to the architecture above:
+These features require NO breaking changes to the sectioned architecture:
 
 | Feature | How to Add | Priority |
 |---------|------------|----------|
-| **Presets** | Add `preset: Option<String>` to `DetailView`, change `flatten_content()` | Low |
-| **Grid layout** | Add `layout: LayoutKind` to sections, branch in `render()` | Low |
-| **Tab between sections** | Replace `flat_items` with `sections: Vec<SectionView>` | Low |
+| **Presets** | `build_sections()` reads config, sets layout per section | Medium |
+| **Grid layout** | Check `section.layout` in render loop, branch to grid renderer | Medium |
+| **Collapse sections** | Add `collapsed: bool` to `SectionView`, skip rendering if true | Low |
+| **Tab between sections** | Track `active_section`, Tab jumps to next section's first item | Low |
 | **More backends** | Implement `api::*` traits for Spotify/SoundCloud | Medium |
 
 ---
