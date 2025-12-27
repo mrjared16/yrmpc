@@ -10,8 +10,8 @@
     background_color: None,
     text_color: None,
     header_background_color: None,
-    modal_background_color: None,
-    modal_backdrop: false,
+    modal_background_color: "#1e2030",
+    modal_backdrop: true,
     preview_label_style: (fg: "yellow"),
     preview_metadata_group_style: (fg: "yellow", modifiers: "Bold"),
     tab_bar: (

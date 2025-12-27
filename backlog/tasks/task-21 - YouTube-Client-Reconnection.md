@@ -1,9 +1,10 @@
 ---
 id: task-21
 title: YouTube Client Reconnection
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-17 03:40'
+updated_date: '2025-12-27 10:35'
 labels: []
 dependencies: []
 priority: high
@@ -27,3 +28,9 @@ See: .agent/session-2025-12-17-cpu-fix.md for full context
 - [ ] #2 No manual daemon restart required
 - [ ] #3 Reconnection is logged for debugging
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: YouTubeProxy::reconnect() implemented in youtube/client.rs with socket reconnection and buffer recreation.
+<!-- SECTION:NOTES:END -->

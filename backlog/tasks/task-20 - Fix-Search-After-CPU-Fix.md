@@ -1,11 +1,11 @@
 ---
 id: task-20
 title: Fix Search After CPU Fix
-status: In Progress
+status: Done
 assignee:
   - '@agent'
 created_date: '2025-12-16 18:32'
-updated_date: '2025-12-17 03:30'
+updated_date: '2025-12-27 10:35'
 labels: []
 dependencies: []
 priority: high
@@ -32,9 +32,9 @@ Search broke after CPU fix (task-6). The 1s sleep workaround in read_response() 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Search works again
+- [x] #1 Search works again
 - [x] #2 CPU stays at 0% when idle
-- [ ] #3 No 1-second workaround sleep
+- [x] #3 No 1-second workaround sleep
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -66,4 +66,16 @@ Session 2025-12-17 findings:
 
 The core fix is CORRECT - the 'continue' was starving the request thread.
 The 'Broken pipe' errors are from a SEPARATE daemon reconnection issue.
+
+Session 2025-12-27 Update:
+
+Navigator architecture now integrated into ui/mod.rs:
+- SearchPaneV2 receives events via Navigator.on_query_finished()
+- Proper event routing ensures search results arrive correctly
+- Legacy actor.rs deleted (was dead code, never compiled)
+
+AC #1 (Search works) should now be testable with Navigator enabled.
+Remaining: verify search end-to-end with daemon running.
+
+Verified 2025-12-27: Search fully working via IPC. YouTubeProxy has 100ms polling. Navigator routes query results correctly.
 <!-- SECTION:NOTES:END -->

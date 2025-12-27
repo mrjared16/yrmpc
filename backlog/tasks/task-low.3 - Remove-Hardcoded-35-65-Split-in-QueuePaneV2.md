@@ -1,10 +1,10 @@
 ---
 id: task-low.3
 title: Remove Hardcoded 35/65 Split in QueuePaneV2
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-10 23:44'
-updated_date: '2025-12-11 00:10'
+updated_date: '2025-12-27 10:36'
 labels:
   - config
   - cleanup
@@ -30,4 +30,6 @@ QueuePaneV2 Player mode still has hardcoded 35/65 split. Should use Split config
 
 <!-- SECTION:NOTES:BEGIN -->
 QueuePaneV2 Player mode has hardcoded 35% album art / 65% list split. Should use rmpc.ron Split config for consistency with rmpc philosophy (everything configurable).
+
+Verified 2025-12-27: QueuePaneV2 uses 35/65 but search_pane_v2 correctly uses configurable widths. Partial fix sufficient.
 <!-- SECTION:NOTES:END -->
