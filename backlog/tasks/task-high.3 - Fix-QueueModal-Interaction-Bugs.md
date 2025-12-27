@@ -4,7 +4,7 @@ title: Fix QueueModal Interaction Bugs
 status: To Do
 assignee: []
 created_date: '2025-12-11 00:09'
-updated_date: '2025-12-11 00:09'
+updated_date: '2025-12-27 10:36'
 labels:
   - bug
   - queue
@@ -45,3 +45,9 @@ User reported queue modal interactions not working properly. Modal may have runt
 - [ ] #4 Runtime test: j/k navigation in modal works
 - [ ] #5 Runtime test: Enter (play) and d (delete) work in modal
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: QueueModal logic superseded by Navigator architecture. QueuePaneV2 is primary interaction point now. May be obsolete.
+<!-- SECTION:NOTES:END -->

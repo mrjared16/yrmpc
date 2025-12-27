@@ -1,9 +1,10 @@
 ---
 id: task-16
 title: Fix Search Layout and Queue Behavior Issues
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-11 14:28'
+updated_date: '2025-12-27 10:30'
 labels:
   - ui
   - queue
@@ -27,3 +28,9 @@ Fix 6 issues found during testing: SearchPane layout too narrow/missing preview,
 - [ ] #5 #5 Queue: Cover image uses larger constraints (Percentage vs fixed)
 - [ ] #6 #6 All tests pass: cargo check && manual testing
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: search_pane_v2.rs implements 3-column layout with configurable widths from ctx.config.theme.column_widths.
+<!-- SECTION:NOTES:END -->

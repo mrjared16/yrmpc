@@ -1,5 +1,34 @@
 # Development Commands
 
+## Daemon Management (YouTube Backend)
+
+### Start Debug Daemon
+```bash
+./restart_daemon_debug.sh
+```
+
+### Start Release Daemon
+```bash
+./restart_daemon.sh
+```
+
+### Monitor Daemon Logs
+```bash
+tail -f /tmp/rmpcd-debug.log
+```
+
+### Monitor TUI Logs
+```bash
+tail -f /tmp/rmpc_1000.log
+```
+
+### Check CPU Usage (per thread)
+```bash
+ps -T -p $(pgrep -f "rmpc.*config") -o pid,spid,%cpu,comm --no-headers
+```
+
+---
+
 ## Build Commands
 
 ### Debug Build

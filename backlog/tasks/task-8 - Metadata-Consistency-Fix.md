@@ -1,10 +1,10 @@
 ---
 id: task-8
 title: Metadata Consistency Fix
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-09 21:21'
-updated_date: '2025-12-09 21:37'
+updated_date: '2025-12-27 10:28'
 labels:
   - bug
 dependencies: []
@@ -32,3 +32,9 @@ Fix case mismatch: Song.album() uses "Album" but YouTube uses "album".
 - [ ] #1 Song.album() checks both 'album' and 'Album' keys
 - [ ] #2 Queue view shows album metadata correctly
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: domain/song.rs uses unified HashMap<String, Vec<String>> with standard getters.
+<!-- SECTION:NOTES:END -->

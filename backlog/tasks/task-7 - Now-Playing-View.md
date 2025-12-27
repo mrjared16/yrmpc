@@ -4,7 +4,7 @@ title: Now Playing View
 status: To Do
 assignee: []
 created_date: '2025-12-09 21:20'
-updated_date: '2025-12-09 21:37'
+updated_date: '2025-12-27 10:36'
 labels:
   - ui
 dependencies: []
@@ -34,3 +34,9 @@ R-NOW-1/2/3: Large album art, progress bar, controls.
 - [ ] #2 Progress bar with elapsed/total time
 - [ ] #3 Playback controls accessible via keyboard
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: QueuePaneV2 has integrated Player mode with album art. Not a standalone pane but a view mode toggle. May be sufficient - consider closing.
+<!-- SECTION:NOTES:END -->

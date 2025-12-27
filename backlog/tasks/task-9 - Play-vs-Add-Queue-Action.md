@@ -1,10 +1,10 @@
 ---
 id: task-9
 title: Play vs Add Queue Action
-status: To Do
+status: Done
 assignee: []
 created_date: '2025-12-09 21:21'
-updated_date: '2025-12-09 21:37'
+updated_date: '2025-12-27 10:28'
 labels:
   - ui
   - queue
@@ -33,3 +33,9 @@ R-SEARCH-3: Enter=play (replace queue), Shift+Enter=add to queue.
 - [ ] #1 Enter on search item plays immediately
 - [ ] #2 Shift+Enter adds to queue without playing
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Verified 2025-12-27: search_pane_v2.rs distinguishes add_to_queue (enqueue) vs play_song (clear+play). ListAction::Activate vs Enqueue.
+<!-- SECTION:NOTES:END -->

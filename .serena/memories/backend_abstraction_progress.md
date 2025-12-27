@@ -1,82 +1,126 @@
-# Backend Abstraction Progress Summary
+# Backend Architecture Refactor Progress
 
-## Current Status
-**Errors**: 79 (down from 159 initial)
-**Progress**: 50% complete
+**Last Updated**: 2025-12-23
+**Status**: Phase 1 Naming Refactor In Progress (BUILD BROKEN)
 
-## What We've Accomplished
+## Current Architecture
 
-### Phase 1: Core Missing Methods ✅
-Added delegation methods to `player::Client`:
-- `list_playlist_info` - List songs in playlists
-- `find_stickers` - Find stickers in database
-- `switch_to_partition` - Switch MPD partitions
-- `send_start_cmd_list`, `send_execute_cmd_list`, `read_ok` - Command batching
-- `send_add`, `send_playlist_add` - Batched add operations
-- `sticker`, `get_status` - Additional MPD operations
+All backends are now unified under `src/backends/`:
 
-### Phase 2: Extension Trait Implementation ✅
-Implemented `MpdClientExt` trait for `player::Client`:
-- `enqueue_multiple` - Batch enqueue operations
-- `delete_multiple` - Batch delete operations
-- `create_playlist` - Create playlists with songs
-- `add_to_playlist_multiple` - Add multiple songs to playlist
-- `set_sticker_multiple`, `delete_sticker_multiple` - Batch sticker operations
-- `fetch_song_stickers` - Fetch stickers for multiple songs
-- `next_keep_state`, `prev_keep_state` - Navigation with state preservation
-- `play_position_safe`, `list_partitioned_outputs` - Additional helpers
+```
+src/backends/
+├── mod.rs                   # Re-exports with onboarding documentation
+├── traits.rs                # MusicBackend + QueueOperations traits
+├── client.rs                # BackendDispatcher (was PlayerController) - PARTIAL
+├── interaction.rs           # BackendActions trait (was MpdClientExt) - COMPLETE
+├── messaging.rs             # Request/response types
+├── mpd/
+│   ├── mod.rs               # MpdBackend
+│   ├── backend.rs           # Implementation
+│   └── protocol/            # MPD protocol library
+└── youtube/
+    ├── mod.rs
+    ├── backend.rs           # YouTubeBackend
+    ├── client.rs            # YouTubeProxy (was YouTubeClient)
+    ├── server/              # Daemon architecture
+    │   ├── mod.rs
+    │   ├── orchestrator.rs
+    │   └── handlers/
+    └── ...
+```
 
-## Remaining Issues (79 errors)
+## What's Done (This Session - 2025-12-23)
 
-### Category 1: Missing Methods (~4 errors)
-- `pause_toggle` (2 occurrences)
-- `move_in_queue` (2 occurrences)
+### Phase 1 Naming Refactor
 
-### Category 2: Type Mismatches (~14 errors)
-- Return type mismatches between backends
-- `?` operator incompatibilities
+- [x] `MpdClientExt` → `BackendActions` (with deprecated alias)
+- [x] Updated `backends/mod.rs` with comprehensive onboarding documentation
+- [x] Updated `backends/interaction.rs` with trait documentation
+- [ ] `PlayerController` → `BackendDispatcher` (PARTIALLY COMPLETE - has remaining reference)
 
-### Category 3: Argument Count Mismatches (~20 errors)
-- Methods expecting different argument counts
-- Likely due to Optional parameters in MPD vs MPV
+### Previous Sessions
 
-### Category 4: Field Access Errors (~6 errors)
-- Accessing `.0` on Vec types (should be direct Vec access)
-- Likely from MPD types that wrap Vec in tuple structs
+- [x] Phase 1: File reorganization (2025-12-22)
+- [x] All backends under src/backends/
+- [x] MPD protocol separated into protocol/ subdirectory
+- [x] `song.file` → `song.uri` rename (with serde alias)
+- [x] YouTube server split into handlers + orchestrator
 
-### Category 5: Closure Type Mismatches (~4 errors)
-- Closures expecting `Client<'b>` instead of `player::Client<'_>`
-- Need to update closure signatures in browser.rs
+## Current Issue (BUILD BROKEN)
 
-### Category 6: Import Errors (~3 errors)
-- `commands::sticker` module not found
-- Need to re-export sticker types
+**Error**: Line 142 in `backends/client.rs` still references `PlayerController::YouTube`
 
-## Next Steps
+**Fix Command**:
+```bash
+cd <PROJECT_ROOT>/rmpc
+sed -i 's/PlayerController/BackendDispatcher/g' src/backends/client.rs
+cargo build
+```
 
-1. **Add remaining missing methods** (pause_toggle, move_in_queue)
-2. **Fix field access errors** (`.0` on Vec types)
-3. **Fix closure type mismatches** in browser.rs
-4. **Fix argument count mismatches** (check method signatures)
-5. **Re-export sticker types** for accessibility
+## Naming Changes Summary
 
-## Architecture Notes
+| Old Name | New Name | Status | File |
+|----------|----------|--------|------|
+| `MpdClientExt` | `BackendActions` | ✅ Complete | `interaction.rs` |
+| `PlayerController` | `BackendDispatcher` | 🔄 Partial | `client.rs` |
+| `YouTubeClient` | `YouTubeProxy` | ✅ Complete | `youtube/client.rs` |
+| `song.file` | `song.uri` | ✅ Complete | `domain/song.rs` |
 
-- **Hybrid approach works well**: Keep extension trait but implement for `player::Client`
-- **Graceful degradation**: MPV backend returns empty/Ok for unsupported operations
-- **Logging**: Added debug logs for unsupported operations
-- **Type safety**: Compiler catches all backend incompatibilities
+## Deprecated Aliases Added
 
-## Files Modified
+```rust
+// In backends/interaction.rs (line 785-789)
+#[deprecated(since = "0.11.0", note = "Use BackendActions instead")]
+pub use BackendActions as MpdClientExt;
 
-- `src/player/client.rs` - Added 8+ delegation methods
-- `src/shared/mpd_client_ext.rs` - Implemented trait for player::Client
-- `src/config/mod.rs` - Fixed typo (Huse → use)
-- `src/core/work.rs` - Fixed closure type
-- `src/ui/browser.rs` - Updated imports
+// In backends/mod.rs (line 80-82)
+#[deprecated(since = "0.11.0", note = "Use BackendActions instead")]
+pub use interaction::MpdClientExt;
 
-## Estimated Remaining Work
+// TODO: Add PlayerController alias after completing rename
+```
 
-- **Time**: ~30-45 minutes
-- **Complexity**: Low (mostly mechanical fixes)
-- **Risk**: Low (pattern is established)
+## What's Pending
+
+### Immediate (Fix Build)
+- [ ] Fix remaining `PlayerController::YouTube` reference in `client.rs:142`
+- [ ] Add `PlayerController` deprecated alias in `mod.rs`
+
+### Phase 1 Remaining
+- [ ] Update all `PlayerController` usages across codebase
+- [ ] Add deprecation to `player/mod.rs`
+- [ ] File renames (deferred): `interaction.rs` → `actions.rs`, `messaging.rs` → `request_types.rs`
+
+### Future Phases
+- [ ] Phase 2: Trait split (Core + Extensions: PlaylistOps, LibraryBrowse)
+- [ ] Phase 3: Daemon mode (`rmpc --daemon`)
+
+## Import Patterns (Updated)
+
+```rust
+// NEW: Use BackendActions for high-level operations
+use crate::backends::BackendActions;
+
+// NEW: BackendDispatcher is the main entry point (once rename complete)
+use crate::backends::BackendDispatcher;
+
+// Traits
+use crate::backends::{MusicBackend, QueueOperations};
+
+// Backends
+use crate::backends::{MpdBackend, YouTubeBackend};
+
+// YouTube specifics
+use crate::backends::youtube::{YouTubeProxy};
+
+// DEPRECATED but still works:
+use crate::backends::MpdClientExt;  // Use BackendActions instead
+use crate::backends::PlayerController;  // Use BackendDispatcher instead
+```
+
+## Key Design Decisions
+
+1. **Aliasing Strategy**: Use deprecated aliases, not clean breaks (for upstream merge compatibility)
+2. **No Config Changes**: All renames are internal only
+3. **Phased Approach**: Working build at each step
+4. **File Renames Deferred**: Module aliasing doesn't work well, so keep filenames for now

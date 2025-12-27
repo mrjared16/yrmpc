@@ -11,6 +11,11 @@
     search: (
         sections: ["top_results", "songs", "artists", "albums", "playlists"],
     ),
+    // Use new pane implementations (false = new, true = legacy)
+    legacy_panes: (
+        queue: false,   // Use QueuePaneV2 (new)
+        search: false,  // Use new BrowseStack-based SearchPane
+    ),
     // Theme file with rich list UI enabled
     theme: Some("rich_test"),
     tabs: [
@@ -24,23 +29,11 @@
                 direction: Horizontal,
                 panes: [
                     (
-                        size: "40%",
-                        pane: Split(
-                            direction: Vertical,
-                            panes: [
-                                (
-                                    size: "3",
-                                    pane: Pane(Lyrics)
-                                ),
-                                (
-                                    size: "100%",
-                                    pane: Pane(AlbumArt)
-                                ),
-                            ],
-                        ),
+                        size: "35%",
+                        pane: Pane(AlbumArt),
                     ), 
                     (
-                        size: "60%",
+                        size: "65%",
                         pane: Pane(Queue)
                     ),
                 ],
