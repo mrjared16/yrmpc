@@ -339,11 +339,11 @@ all vim-style key handling logic.
 │      │           │               │          ┌────┴────┐                │
 │      │           ▼               │          ▼         ▼                │
 │      │   ┌───────────────┐       │       Success   Failure             │
-│      │   │NavigateTo     │       │          │         │                │
-│      │   │Play(song)     │       │          ▼         ▼                │
-│      │   │PlayAll        │       │       Handled   BackStage          │
-│      │   │Enqueue        │       │                    │                │
-│      │   └───────┬───────┘       │                    │                │
+│      │   │Activate(item) │       │          │         │                │
+│      │   └───────┬───────┘       │          ▼         ▼                │
+│      │           │               │       Handled   BackStage          │
+│      │           ▼               │                    │                │
+│      │     Pane.resolve_action() │                    │                │
 │      │           │               │                    │                │
 │      │           ▼               ▼                    ▼                │
 │      │       PaneAction      PaneAction           PaneAction           │
@@ -355,9 +355,127 @@ all vim-style key handling logic.
 │      │                                                                  │
 │      ├── NavigateTo(entity) → fetch content, push to DetailPane        │
 │      ├── BackPane → pop history, switch pane                           │
-│      ├── Play(song) → execute playback                                 │
-│      ├── PlayAll → clear queue, add songs, play                        │
-│      └── Enqueue → add to queue                                        │
+│      ├── Play(song) → convert to Intent, dispatch to handlers          │
+│      ├── PlayAll → convert to Intent, dispatch to handlers             │
+│      ├── Enqueue → convert to Intent, dispatch to handlers             │
+│      └── Execute(Intent) → dispatch directly to handlers               │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Action System (Intent → Dispatcher → Handler)
+
+The action system provides a unified way to handle user actions across panes.
+Instead of each pane implementing its own action logic, they build an Intent
+and let the ActionDispatcher dispatch to appropriate handlers.
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         ACTION SYSTEM                                    │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  PaneAction::Play(song) / PlayAll / Enqueue / Execute(Intent)          │
+│      │                                                                  │
+│      ▼                                                                  │
+│  Navigator.handle_pane_action()                                         │
+│      │                                                                  │
+│      │  Converts to Intent { action: IntentKind, selection: Selection } │
+│      │                                                                  │
+│      ▼                                                                  │
+│  ActionDispatcher.dispatch(&Intent, ctx)                                │
+│      │                                                                  │
+│      │  Handlers called in priority order (highest first)              │
+│      │                                                                  │
+│      ├───────────────────────────────────────────────────────┐         │
+│      ▼                   ▼                   ▼               ▼         │
+│  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐    │
+│  │TogglePlay  │   │PlayHandler │   │QueueHandler│   │SaveHandler │    │
+│  │  Handler   │   │            │   │            │   │            │    │
+│  │ (pri: 10)  │   │ (pri: 0)   │   │ (pri: 0)   │   │ (pri: 0)   │    │
+│  └────────────┘   └────────────┘   └────────────┘   └────────────┘    │
+│         │                │                │               │            │
+│         ▼                ▼                ▼               ▼            │
+│      ┌────────────────────────────────────────────────────────┐       │
+│      │                    HandleResult                         │       │
+│      │  Done          - Action handled successfully            │       │
+│      │  NotApplicable - Handler can't handle, try next         │       │
+│      │  Skip          - Silently pass to next handler          │       │
+│      └────────────────────────────────────────────────────────┘       │
+│                                                                         │
+│  EXTENSIBILITY:                                                         │
+│  ──────────────                                                         │
+│  • Add YouTubePlayHandler with priority 5 to intercept Play intents    │
+│  • Add LoggingHandler with priority 100 for analytics                  │
+│  • Backend-specific handlers can override default behavior             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Intent and Selection
+
+```rust
+// The kind of action the user wants to perform
+enum IntentKind {
+    Play,              // Play selected content
+    TogglePlayback,    // Toggle play/pause (no selection needed)
+    AddToQueue,        // Add to queue
+    RemoveFromQueue,   // Remove from queue
+    MoveUp,            // Move up in queue
+    MoveDown,          // Move down in queue
+    SaveToLibrary,     // Save to library
+}
+
+// User intent: what action on what selection
+struct Intent {
+    action: IntentKind,
+    selection: Selection,
+}
+
+// A selection of items to act upon
+struct Selection {
+    items: Vec<DetailItem>,
+}
+
+impl Selection {
+    fn is_empty(&self) -> bool;
+    fn songs_cloned(&self) -> Vec<Song>;
+    fn has_only(&self, types: &[ContentType]) -> bool;
+    fn find_song_index(&self, uri: &str) -> Option<usize>;
+}
+```
+
+### Layer Separation (UI vs Domain)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         LAYER SEPARATION                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  UI Layer (ListItem) - ui/widgets/list_item.rs                         │
+│  ─────────────────────────────────────────────                         │
+│  Used for LIST RENDERING. Non-actionable items included.               │
+│                                                                         │
+│  enum ListItem {                                                        │
+│      Content(DetailItem),  // Wraps actionable domain item              │
+│      Header(String),       // Section header (non-focusable)            │
+│      Spacer,               // Visual spacing                            │
+│  }                                                                      │
+│                                                                         │
+│  ─────────────────────────────────────────────────────────────────────  │
+│                                                                         │
+│  Domain Layer (DetailItem) - domain/detail_item.rs                     │
+│  ─────────────────────────────────────────────────                     │
+│  Used for ACTION HANDLING. Only actionable content.                    │
+│                                                                         │
+│  enum DetailItem {                                                      │
+│      Song(Song),           // Playable content                          │
+│      Ref(ContentRef),      // Navigable reference (album, artist, etc.) │
+│      Header { title }      // DEPRECATED - use ListItem::Header         │
+│  }                                                                      │
+│                                                                         │
+│  Selection is built from DetailItem, never ListItem.                   │
 │                                                                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -409,9 +527,10 @@ enum PaneAction {
     Handled,
     NavigateTo(EntityRef),
     BackPane,
-    Play(Song),
-    PlayAll { songs: Vec<Song>, start_index: usize },
-    Enqueue(Vec<Song>),
+    Play(Song),                                  // Converted to Intent internally
+    PlayAll { songs: Vec<Song>, start_index },   // Converted to Intent internally
+    Enqueue(Vec<Song>),                          // Converted to Intent internally
+    Execute(Intent),                             // Direct Intent execution
 }
 
 // Entity reference for navigation
@@ -428,37 +547,49 @@ struct EntityRef {
 
 ```
 rmpc/src/
+├── actions/                         # Action System (Intent → Dispatcher → Handler)
+│   ├── mod.rs                       # Public exports
+│   ├── intent.rs                    # IntentKind, Intent, Selection
+│   ├── dispatcher.rs                # ActionDispatcher
+│   ├── handler.rs                   # Handler trait, HandleResult
+│   └── handlers/
+│       ├── mod.rs                   # Handler registrations
+│       ├── play.rs                  # PlayHandler
+│       ├── playback.rs              # TogglePlaybackHandler
+│       ├── queue.rs                 # QueueHandler
+│       └── save.rs                  # SaveHandler
+│
 ├── ui/
-│   ├── mod.rs                    # Ui struct, event routing
+│   ├── mod.rs                       # Ui struct, event routing
 │   │
 │   ├── panes/
-│   │   ├── mod.rs                # Pane traits, pane registration
-│   │   ├── navigator_types.rs    # NavigatorPane, TabPane, DetailPane traits
-│   │   ├── navigator.rs          # Navigator controller
+│   │   ├── mod.rs                   # Pane traits, pane registration
+│   │   ├── navigator_types.rs       # NavigatorPane, TabPane, DetailPane traits
+│   │   ├── navigator.rs             # Navigator controller (owns ActionDispatcher)
 │   │
-│   │   ├── search_pane_v2.rs     # SearchPane (uses InputContentView)
-│   │   ├── queue_pane_v2.rs      # QueuePane (uses ContentView)
-│   │   ├── library_pane.rs       # LibraryPane (uses ContentView)
+│   │   ├── search_pane_v2.rs        # SearchPane (uses InputContentView)
+│   │   ├── queue_pane_v2.rs         # QueuePane (uses ContentView)
+│   │   ├── library_tab.rs           # LibraryPane (uses ContentView)
 │   │   │
-│   │   ├── artist_detail.rs      # ArtistDetailPane (thin wrapper)
-│   │   ├── album_detail.rs       # AlbumDetailPane (thin wrapper)
-│   │   └── playlist_detail.rs    # PlaylistDetailPane (thin wrapper)
+│   │   ├── artist_detail.rs         # ArtistDetailPane (thin wrapper)
+│   │   ├── album_detail.rs          # AlbumDetailPane (thin wrapper)
+│   │   └── playlist_detail.rs       # PlaylistDetailPane (thin wrapper)
 │   │
 │   └── widgets/
-│       ├── content_view.rs       # ContentView<C> - unified stacking
-│       ├── input_content_view.rs # InputContentView - input + content
-│       ├── section_list.rs       # SectionList with handle_key()
-│       ├── interactive_list_view.rs  # Core navigation state
-│       ├── list_view_state.rs    # Selection, scroll, marks
-│       ├── find_state.rs         # Find mode state
-│       ├── section_view.rs       # Section structure
-│       └── item_list.rs          # Item rendering widget
+│       ├── content_view.rs          # ContentView<C> - unified stacking
+│       ├── input_content_view.rs    # InputContentView - input + content
+│       ├── section_list.rs          # SectionList with handle_key(), get_selection()
+│       ├── selectable_list.rs       # Core navigation state
+│       ├── list_view_state.rs       # Selection, scroll, marks
+│       ├── list_item.rs             # ListItem UI wrapper (Header/Spacer/Content)
+│       ├── find_state.rs            # Find mode state
+│       └── item_list.rs             # Item rendering widget
 │
 ├── domain/
-│   ├── content.rs                # Content trait, ArtistContent, etc.
-│   ├── detail_item.rs            # DetailItem enum
-│   ├── display.rs                # ListItemDisplay trait
-│   └── song.rs                   # Song struct
+│   ├── content.rs                   # ContentViewable trait, ArtistContent, etc.
+│   ├── detail_item.rs               # DetailItem enum (Song/Ref, deprecated Header)
+│   ├── display.rs                   # ListItemDisplay trait
+│   └── song.rs                      # Song struct
 │
 └── backends/
     └── ...
