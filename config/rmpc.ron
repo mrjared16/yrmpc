@@ -11,10 +11,9 @@
     search: (
         sections: ["top_results", "songs", "artists", "albums", "playlists"],
     ),
-    // Use new pane implementations (false = new, true = legacy)
+    // Use new Navigator architecture (enabled: false = new, true = legacy)
     legacy_panes: (
-        queue: false,   // Use QueuePaneV2 (new)
-        search: false,  // Use new BrowseStack-based SearchPane
+        enabled: false,  // Use new Navigator architecture
     ),
     // Theme file with rich list UI enabled
     theme: Some("rich_test"),

@@ -8,6 +8,80 @@
 4. **Find, not Filter** - Highlight matches, don't hide non-matches
 5. **Vim-style modes** - Normal, Edit, Find modes
 6. **Single path** - One unified component hierarchy, no parallel implementations
+7. **Sections as Containers** - Sections are first-class domain objects, not markers in flat lists
+
+---
+
+## Section Architecture (Backend-Agnostic)
+
+### The Problem with Markers
+
+❌ **Anti-pattern**: Using `Header` items as markers in a flat list:
+```
+items = [Header("Songs"), Song, Song, Header("Albums"), Album, ...]
+```
+This requires scanning/reconstruction at every layer, leading to bugs and duplication.
+
+### The Solution: Sections as Containers
+
+✅ **Correct pattern**: Sections contain their items:
+```
+sections = [
+    Section { key: "songs", title: "Songs", items: [Song, Song] },
+    Section { key: "albums", title: "Albums", items: [Album] },
+]
+```
+
+### Layer Responsibilities
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    DOMAIN LAYER                              │
+│                                                              │
+│   struct Section {                                           │
+│       key: String,           // "songs", "albums", etc.     │
+│       title: String,         // Display name                 │
+│       items: Vec<MediaItem>, // Content                      │
+│   }                                                          │
+│                                                              │
+│   struct SearchResults {                                     │
+│       query: String,                                         │
+│       sections: Vec<Section>, // Structured, not flat!      │
+│   }                                                          │
+│                                                              │
+│   // Utility for backends without native sections           │
+│   fn group_items_into_sections(items) -> Vec<Section>       │
+│                                                              │
+│   NO CONFIG AWARENESS - pure data structures                │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    BACKEND LAYER                             │
+│                                                              │
+│   YouTube: Parse shelves → Vec<Section> directly            │
+│   MPD: Use group_items_into_sections() utility              │
+│                                                              │
+│   Returns SearchResults in NATIVE order (no config)         │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    UI LAYER                                  │
+│                                                              │
+│   fn apply_config_order(sections, config) -> Vec<Section>  │
+│                                                              │
+│   Config ordering is a PRESENTATION concern.                │
+│   UI reorders sections, then maps to SectionView.           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Insight
+
+- **Config ordering** belongs in UI layer (presentation concern)
+- **Section structure** belongs in domain layer (data concern)
+- **Backends** return sections in their native order
+- **No `MediaItem::Header`** needed - sections are containers, not markers
 
 ---
 

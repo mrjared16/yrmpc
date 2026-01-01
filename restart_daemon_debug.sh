@@ -51,4 +51,5 @@ echo ""
 
 # Run with backtrace and log env, output to both terminal and log file
 # Use ytx for faster stream extraction (~200ms vs ~3-4s with yt-dlp)
-RUST_BACKTRACE=1 RUST_LOG=info "$DAEMON_PATH" --extractor ytx 2>&1 | tee "$LOG_FILE"
+# RUST_LOG=trace enables diagnostic logs for debugging images and EOF
+RUST_BACKTRACE=1 RUST_LOG=trace "$DAEMON_PATH" --extractor ytx 2>&1 | tee "$LOG_FILE"

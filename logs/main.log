@@ -1,0 +1,12 @@
+[2025-12-31 12:04:56] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.71-0-plus, Commit: 06075c0, BuiltAt: 2025-12-30T15:36:06Z
+[2025-12-31 12:56:38] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.71-0-plus, Commit: 06075c0, BuiltAt: 2025-12-30T15:36:06Z
+[2025-12-31 12:56:45] [--------] [warn ] [antigravity.go:179] antigravity: failed to fetch project ID: no cloudaicompanionProject in response
+[2026-01-01 02:43:28] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.73-0-plus, Commit: 19232c6, BuiltAt: 2025-12-31T03:53:25Z
+[2026-01-01 02:44:09] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.73-0-plus, Commit: 19232c6, BuiltAt: 2025-12-31T03:53:25Z
+[2026-01-01 02:44:09] [--------] [error] [antigravity_login.go:32] Antigravity authentication failed: antigravity: failed to start callback server: listen tcp :51121: bind: address already in use
+[2026-01-01 02:44:18] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.73-0-plus, Commit: 19232c6, BuiltAt: 2025-12-31T03:53:25Z
+[2026-01-01 02:44:18] [--------] [error] [antigravity_login.go:32] Antigravity authentication failed: antigravity: failed to start callback server: listen tcp :51121: bind: address already in use
+[2026-01-01 02:45:16] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.73-0-plus, Commit: 19232c6, BuiltAt: 2025-12-31T03:53:25Z
+[2026-01-01 02:45:24] [--------] [warn ] [antigravity.go:179] antigravity: failed to fetch project ID: no cloudaicompanionProject in response
+[2026-01-01 02:49:01] [--------] [info ] [main.go:442] CLIProxyAPI Version: 6.6.73-0-plus, Commit: 19232c6, BuiltAt: 2025-12-31T03:53:25Z
+[2026-01-01 02:49:10] [--------] [info ] [antigravity.go:182] antigravity: obtained project ID eloquent-elevator-p2hmx
