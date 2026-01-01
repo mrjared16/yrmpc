@@ -1,7 +1,7 @@
 # LLM Agent Guidelines - yrmpc
 
 **Project**: YouTube Music TUI Client (Rust + Ratatui)
-**Updated**: 2025-12-27
+**Updated**: 2025-12-30
 **Status**: Core Playable - Daily Use
 
 ---
@@ -62,6 +62,28 @@ backlog task edit <id> -s Done
 ```
 
 > **Full guide**: [BACKLOG_INSTRUCTIONS.md](BACKLOG_INSTRUCTIONS.md)
+
+---
+
+## Available Skills
+
+This project uses **Claude Code skills** for specialized workflows. Skills auto-trigger based on context or can be explicitly invoked.
+
+### Architecture & Design
+
+**`/streaming-architecture-review`** - Expert architectural review
+- **When**: Architectural questions, refactoring, SOLID violations, design patterns
+- **What**: Cross-cutting analysis with ASCII diagrams and feature scenarios
+- **Auto-triggers**: Keywords like "architecture", "refactor", "code smell", "SOLID"
+- **Context**: Editing Navigator, actions, or domain files
+- **Config**: `.claude/skills/skill-rules.json`
+
+### Development Workflows
+
+**`/dev-docs`** - Create strategic plans with task breakdown
+**`/dev-docs-update`** - Update documentation before context compaction
+
+> **Add new skills**: Create `.claude/skills/<name>/SKILL.md` and update `skill-rules.json`
 
 ---
 
@@ -166,7 +188,7 @@ See [docs/ADR-backend-refactor.md](docs/ADR-backend-refactor.md) for details.
 ```
 Think harder. Critique before responding.
 
-You're a principal engineer (10+ yrs production streaming). Apply SOLID, prioritize maintainability, refactor proactively when spotting better designs.
+You're a 10x principal engineer (10+ yrs production streaming). Apply SOLID, design pattern, clean code principles prioritize maintainability, refactor proactively when spotting better designs.
 
 **Each phase**: "Best approach? What breaks at scale?"  
 **Show reasoning** when pivoting from initial solution.
@@ -181,6 +203,8 @@ You're a principal engineer (10+ yrs production streaming). Apply SOLID, priorit
 - Edit backlog task files directly (use CLI only)
 - Download entire playlists (stream only)
 - Break vim-style keyboard navigation
+- Use separate `legacy_panes.queue`/`legacy_panes.search` flags (DEPRECATED - use single `enabled` boolean)
+- Write tests that expect wrong values (spaces instead of emojis, etc.)
 
 ### ALWAYS
 - Use `--plain` flag when viewing backlog tasks
@@ -188,3 +212,37 @@ You're a principal engineer (10+ yrs production streaming). Apply SOLID, priorit
 - Update task AC as you complete them
 - Keep user informed of blockers
 - Read VISION.md and USER_GUIDE.md before starting any task
+- Write E2E tests that verify entire data flow (API → Domain → UI), not just component contracts
+- Verify config schema matches code struct (e.g., `LegacyPanes { enabled: bool }`)
+
+---
+
+## Architecture Gotchas (Lessons Learned 2025-12-31)
+
+### Config Schema
+The `legacy_panes` config MUST be a single boolean:
+```ron
+legacy_panes: (
+    enabled: false,  // Use new Navigator architecture
+),
+```
+**NOT** separate `queue`/`search` flags (old format, deprecated).
+
+### Display Icon Pipeline
+Icons flow through multiple layers - ALL must be correct:
+```
+YouTube API → Song.metadata["type"] → DetailItem::from() → DetailItem::type_icon() → UI
+```
+If any layer fails, icons show wrong. Test the ENTIRE flow, not just components.
+
+### Key Handling
+Navigator handles 1/2/3 for tabs and calls `stop_propagation()`. Tab/Shift-Tab falls through to legacy global handlers. This is by design.
+
+### Testing Anti-Pattern
+**BAD**: Test that `type_icon()` returns ` ` (space) - this HIDES bugs
+**GOOD**: Test that `type_icon()` returns `"🎤"` (actual emoji)
+
+### Extractor Default
+**Default extractor is `ytx`** (fast, ~200ms). Tests and daemon use ytx by default.
+yt-dlp is available as fallback but spawns heavy Python processes - avoid in tests.
+
