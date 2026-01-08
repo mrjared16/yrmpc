@@ -1,7 +1,13 @@
+# ⚠️ DEPRECATED - Do Not Use
+
+**This file is OUTDATED (Dec 2024). Use [AGENTS.md](/AGENTS.md) instead.**
+
+---
+
 # Agent Onboarding Guide: yrmpc (YouTube Music TUI)
 
 **Last Updated**: Dec 8, 2024  
-**Status**: ✅ Rich List UI complete, backend stable, E2E tests passing
+**Status**: ⚠️ DEPRECATED - See AGENTS.md for current information
 
 ## Current Reality (Dec 2024)
 
