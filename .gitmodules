@@ -1,0 +1,6 @@
+[submodule "ytmapi-yrmpc"]
+	path = ytmapi-yrmpc
+	url = https://github.com/mrjared16/ytmapi-yrmpc.git
+[submodule "rmpc"]
+	path = rmpc
+	url = https://github.com/mrjared16/yrmpc.git
