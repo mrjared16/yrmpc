@@ -1,786 +1,162 @@
-# Architecture
+# Architecture Overview
+
+This document provides a high-level overview and routes you to detailed documentation.
 
 ## Design Principles
 
-1. **TabPane + DetailPane** - Two types of panes with clear purposes
-2. **Three-level navigation** - Mode → Stage/Stack → Pane
-3. **Content stacking** - Each pane maintains its own content stack via `ContentView<C>`
-4. **Find, not Filter** - Highlight matches, don't hide non-matches
-5. **Vim-style modes** - Normal, Edit, Find modes
-6. **Single path** - One unified component hierarchy, no parallel implementations
-7. **Sections as Containers** - Sections are first-class domain objects, not markers in flat lists
-
----
-
-## Section Architecture (Backend-Agnostic)
-
-### The Problem with Markers
-
-❌ **Anti-pattern**: Using `Header` items as markers in a flat list:
-```
-items = [Header("Songs"), Song, Song, Header("Albums"), Album, ...]
-```
-This requires scanning/reconstruction at every layer, leading to bugs and duplication.
-
-### The Solution: Sections as Containers
-
-✅ **Correct pattern**: Sections contain their items:
-```
-sections = [
-    Section { key: "songs", title: "Songs", items: [Song, Song] },
-    Section { key: "albums", title: "Albums", items: [Album] },
-]
-```
-
-### Layer Responsibilities
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    DOMAIN LAYER                              │
-│                                                              │
-│   struct Section {                                           │
-│       key: String,           // "songs", "albums", etc.     │
-│       title: String,         // Display name                 │
-│       items: Vec<MediaItem>, // Content                      │
-│   }                                                          │
-│                                                              │
-│   struct SearchResults {                                     │
-│       query: String,                                         │
-│       sections: Vec<Section>, // Structured, not flat!      │
-│   }                                                          │
-│                                                              │
-│   // Utility for backends without native sections           │
-│   fn group_items_into_sections(items) -> Vec<Section>       │
-│                                                              │
-│   NO CONFIG AWARENESS - pure data structures                │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    BACKEND LAYER                             │
-│                                                              │
-│   YouTube: Parse shelves → Vec<Section> directly            │
-│   MPD: Use group_items_into_sections() utility              │
-│                                                              │
-│   Returns SearchResults in NATIVE order (no config)         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    UI LAYER                                  │
-│                                                              │
-│   fn apply_config_order(sections, config) -> Vec<Section>  │
-│                                                              │
-│   Config ordering is a PRESENTATION concern.                │
-│   UI reorders sections, then maps to SectionView.           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Insight
-
-- **Config ordering** belongs in UI layer (presentation concern)
-- **Section structure** belongs in domain layer (data concern)
-- **Backends** return sections in their native order
-- **No `MediaItem::Header`** needed - sections are containers, not markers
-
----
-
-## Implementation Status
-
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Navigator | ✅ Integrated | Lives in `ui/mod.rs`, handles pane routing |
-| ContentView | ✅ Used | All V2 panes use ContentView for stacking |
-| InputContentView | ✅ Used | SearchPane composes InputGroups + ContentView |
-| Legacy Flag | ✅ Removed | V2 panes are now the only implementation |
-
----
+1. **TabPane + DetailPane**: Tabs for browsing, detail panes for deep exploration
+2. **Three-Level Navigation**: Mode → Intra-pane → History stack
+3. **Content Stacking**: Push detail views onto navigation stack, pop to return
+4. **Find not Filter**: Use stacking search, don't filter in place
+5. **Vim Modes**: Normal (navigate), Insert (text input), Visual (selection)
+6. **Single Path**: One correct way to implement each pattern
+7. **Sections as Containers**: Sections hold items, not just headers
 
 ## Component Hierarchy
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         COMPONENT HIERARCHY                                  │
-│                         ═══════════════════                                  │
-│                                                                             │
-│                           ┌─────────────┐                                   │
-│                           │     Ui      │                                   │
-│                           │             │                                   │
-│                           │ Modal stack │                                   │
-│                           │ Event route │                                   │
-│                           └──────┬──────┘                                   │
-│                                  │                                          │
-│                                  ▼                                          │
-│                           ┌─────────────┐                                   │
-│                           │  Navigator  │                                   │
-│                           │             │                                   │
-│                           │ Pane history│                                   │
-│                           │ Tab hotkeys │                                   │
-│                           │ Action exec │                                   │
-│                           └──────┬──────┘                                   │
-│                                  │                                          │
-│              ┌───────────────────┼───────────────────┐                      │
-│              │                   │                   │                      │
-│              ▼                   ▼                   ▼                      │
-│       ┌───────────┐       ┌───────────┐       ┌───────────┐                │
-│       │  TabPane  │       │  TabPane  │       │DetailPane │                │
-│       │  Search   │       │Queue/Lib  │       │Artist/etc │                │
-│       │           │       │           │       │           │                │
-│       │ stages    │       │ no stages │       │ stacking  │                │
-│       └─────┬─────┘       └─────┬─────┘       └─────┬─────┘                │
-│             │                   │                   │                      │
-│             └───────────────────┴───────────────────┘                      │
-│                                 │                                          │
-│                                 ▼                                          │
-│                          ╔═════════════╗                                   │
-│                          ║ContentView<C>║  ◄── UNIFIED COMPONENT            │
-│                          ║             ║                                   │
-│                          ║ Stack<Level>║                                   │
-│                          ║ handle_key()║                                   │
-│                          ╚══════╤══════╝                                   │
-│                                 │                                          │
-│                                 ▼                                          │
-│                          ┌─────────────┐                                   │
-│                          │ SectionList │                                   │
-│                          │             │                                   │
-│                          │handle_key() │                                   │
-│                          │Tab nav      │                                   │
-│                          └──────┬──────┘                                   │
-│                                 │                                          │
-│                                 ▼                                          │
-│                          ┌─────────────┐                                   │
-│                          │Interactive- │                                   │
-│                          │ ListView    │                                   │
-│                          │             │                                   │
-│                          │Mode/Find/Nav│                                   │
-│                          └─────────────┘                                   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                              Ui                                      │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │                         Navigator                              │  │
+│  │  ┌─────────────────────────────────────────────────────────┐  │  │
+│  │  │              TabPane / DetailPane                        │  │  │
+│  │  │  ┌─────────────────────────────────────────────────────┐│  │  │
+│  │  │  │              ContentView<C>                         ││  │  │
+│  │  │  │  ┌─────────────────────────────────────────────────┐││  │  │
+│  │  │  │  │              SectionList                        │││  │  │
+│  │  │  │  │  ┌─────────────────────────────────────────────┐│││  │  │
+│  │  │  │  │  │         InteractiveListView                 ││││  │  │
+│  │  │  │  │  └─────────────────────────────────────────────┘│││  │  │
+│  │  │  │  └─────────────────────────────────────────────────┘││  │  │
+│  │  │  └─────────────────────────────────────────────────────┘│  │  │
+│  │  └─────────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
----
+## Key Abstractions
 
-## Pane Types
+| Abstraction | Purpose |
+|-------------|---------|
+| `Navigator` | Manages pane stack, routing, back navigation |
+| `ContentView<C>` | Generic container for any content type |
+| `SectionList` | Facade for section-based item display |
+| `Intent` | User action representation (play, enqueue, navigate) |
+| `Song` | Core playable item with metadata HashMap for album, artist, etc. |
+| `DetailItem` | View model for list display with title, subtitle, thumbnail. |
+| `Section` | First-class domain object grouping items by semantic key. |
 
-### TabPane (Always Available)
+## Backend Architecture
 
-Has dedicated tab in navigation bar, accessible via hotkey.
+Refactored (Dec 2025) to enforce Interface Segregation and Backend Agnosticism:
 
-| Pane | Hotkey | Purpose |
-|------|--------|---------|
-| Search | 1 | Search YouTube, browse results |
-| Queue | 2 | Current playback queue |
-| Library | 3 | User's synced playlists (2-way sync) |
+1. **Granular Traits**: `MusicBackend` is split into `api::Playback`, `api::Queue`, `api::Discovery`.
+2. **Unified Implementation**: All backends reside in `src/backends/<name>` (e.g., `youtube`, `mpd`).
+3. **Playback Engine**: Current YouTube backend controls an external MPV process over JSON IPC; see [playback-engine.md](arch/playback-engine.md) (engine design) and [backends/youtube/](backends/youtube/README.md) (wiring details).
+4. **Layer Separation**:
+   - `src/domain/`: Defines *what* data is (MediaItem, ContentDetails).
+   - `src/backends/api/`: Defines *how* to fetch data.
+   - `src/ui/views/`: Defines *how* to render data.
 
-**Note:** SearchPane uses `InputContentView` which composes `InputGroups` (for search input) + `ContentView` (for results).
+## Section System
 
-### DetailPane (Shown When Populated)
+Content is organized into typed sections for flexible rendering:
 
-No tab, only accessible via navigation. Each has a content stack.
+- **SectionKey**: Semantic identifier (Albums, Tracks, Artists, TopResults, etc.)
+- **SectionData**: Content variants (Items, Tracks, Stats, Actions, Paginated, Error)
+- **Dynamic Rendering**: UI renders sections based on their key and data type.
 
-| Pane | Content Stack | Purpose |
-|------|---------------|---------|
-| Artist | `ContentView<ArtistContent>` | Artist details, discography |
-| Album | `ContentView<AlbumContent>` | Album tracks, metadata |
-| Playlist | `ContentView<PlaylistContent>` | External/community playlists |
+## Where to Look
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              UI Layout                                   │
-├─────────────────────────────────────────────────────────────────────────┤
-│ [1:Search] [2:Queue] [3:Library]          ← Only TabPanes               │
-├─────────────────────────────────────────────────────────────────────────┤
-│ ← Artist: KIMLONG (2/3)                   ← DetailPane header           │
-│           ▲                                 (shows stack position)      │
-│           └─ Back arrow when in DetailPane                              │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  [FIND]: query_                           ← Find mode indicator         │
-│                                                                         │
-│  ─── Top Songs ──────────────────────────────────────────────────────  │
-│  🎵 ngày dài vắng em                                         [3:45]   │
-│  🎵 bitter                                                   [4:12]   │
-│                                                                         │
-│  ─── Albums ─────────────────────────────────────────────────────────  │
-│  💿 First Album                                                        │
-│                                                                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│ Esc:Back │ Backspace:Pop │ /:Find │ Tab:NextSection │ Enter:Open       │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+### By Task
 
----
+| Task | Read These |
+|------|------------|
+| Fix search/TopResult parsing | [features/search.md](features/search.md), [arch/youtube-integration.md](arch/youtube-integration.md) |
+| Fix playback/MPV issues | [features/playback.md](features/playback.md), [arch/playback-engine.md](arch/playback-engine.md) |
+| Fix navigation/back button | [arch/ui-navigation.md](arch/ui-navigation.md) |
+| Add new pane | [features/navigation.md](features/navigation.md) |
+| Fix queue operations | [features/queue.md](features/queue.md) |
+| Understand action dispatch | [arch/action-system.md](arch/action-system.md) |
+| Modify section display | [arch/section-model.md](arch/section-model.md) |
+| Library/playlist operations | [features/library.md](features/library.md), [capabilities/library-cache.md](capabilities/library-cache.md) |
+| Implement a new backend | [backends/reference/README.md](backends/reference/README.md), [capabilities/README.md](capabilities/README.md) |
+| Understand capability system | [capabilities/README.md](capabilities/README.md) |
+| Config/persistence issues | [arch/persistence.md](arch/persistence.md) |
+| Background tasks/scheduler | [arch/background-tasks.md](arch/background-tasks.md) |
 
-## Three-Level Navigation
+### By Symptom
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                                                                         │
-│  LEVEL 1: MODE (innermost)                                              │
-│  ─────────────────────────                                              │
-│                                                                         │
-│  ┌─────────┐     Esc      ┌─────────┐      /       ┌─────────┐          │
-│  │  Edit   │ ───────────► │ Normal  │ ◄──────────► │  Find   │          │
-│  │         │              │         │              │         │          │
-│  │ (search │   Esc clears │         │   Esc clears │ (typing │          │
-│  │  input) │   find first │         │   find query │  query) │          │
-│  └─────────┘              └─────────┘              └─────────┘          │
-│                                                                         │
-│  Edit: Typing in search input (SearchPane only)                         │
-│  Find: Typing find query (any pane with list)                           │
-│  Normal: Navigation mode                                                │
-│                                                                         │
-│  Key handling in each mode:                                             │
-│  ┌──────────┬──────────────────┬──────────────────┬───────────────────┐ │
-│  │ Key      │ Edit Mode        │ Find Mode        │ Normal Mode       │ │
-│  ├──────────┼──────────────────┼──────────────────┼───────────────────┤ │
-│  │ chars    │ Insert to input  │ Add to query     │ (action keys)     │ │
-│  │ Backspace│ Delete char      │ Delete char      │ Pop stack/stage   │ │
-│  │ Enter    │ Submit search    │ Confirm, keep HL │ Activate item     │ │
-│  │ Esc      │ Exit to Normal   │ Clear & exit     │ Clear HL or Back  │ │
-│  │ Tab      │ -                │ -                │ Next section      │ │
-│  └──────────┴──────────────────┴──────────────────┴───────────────────┘ │
-│                                                                         │
-│  ─────────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│  LEVEL 2: INTRA-PANE (Backspace in Normal mode)                         │
-│  ──────────────────────────────────────────────                         │
-│                                                                         │
-│  DetailPane: Pop content stack (ContentView.pop())                      │
-│    ArtistPane.stack: [A, B, C] → Backspace → [A, B]                     │
-│    At single item: Backspace does nothing                               │
-│                                                                         │
-│  TabPane: Back to previous stage                                        │
-│    SearchPane: Results → Input                                          │
-│    Queue/Library: single stage, Backspace does nothing                  │
-│                                                                         │
-│  ─────────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│  LEVEL 3: PANE HISTORY (Esc in Normal mode, no active find)             │
-│  ──────────────────────────────────────────────────────────             │
-│                                                                         │
-│  history: [Search, Artist, Album, Artist]                               │
-│  Esc pops history, switches to previous pane                            │
-│  Empty DetailPanes are skipped                                          │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+| Symptom | Likely Cause | Read |
+|---------|--------------|------|
+| Empty search results | ytmapi parsing | [arch/youtube-integration.md](arch/youtube-integration.md) |
+| Playback doesn't start | URL extraction | [arch/playback-engine.md](arch/playback-engine.md) |
+| Wrong item displayed | Adapter conversion | [arch/youtube-integration.md](arch/youtube-integration.md) |
+| Navigation stuck | Stack corruption | [arch/ui-navigation.md](arch/ui-navigation.md) |
+| Action not handled | Missing handler | [arch/action-system.md](arch/action-system.md) |
+| Queue out of sync | State mismatch | [features/queue.md](features/queue.md) |
+| Library empty/stale | Cache or backend | [capabilities/library-cache.md](capabilities/library-cache.md), [features/library.md](features/library.md) |
+| Config not loading | Persistence | [arch/persistence.md](arch/persistence.md) |
+| Prefetch not working | Background tasks | [arch/background-tasks.md](arch/background-tasks.md) |
 
----
+## Documentation Index
 
-## ContentView<C> - The Unified Component
+### Zone 1: Architecture (Backend-Agnostic Primitives)
+- [arch/action-system.md](arch/action-system.md) - Intent dispatch, handlers
+- [arch/ui-navigation.md](arch/ui-navigation.md) - Navigator, panes, stacking
+- [arch/section-model.md](arch/section-model.md) - SectionList, UI vs domain
+- [arch/persistence.md](arch/persistence.md) - Config, serialization, state storage
+- [arch/background-tasks.md](arch/background-tasks.md) - Scheduler, prefetch, threading
 
-ContentView is the single component used by ALL panes that display content.
-It replaces the previous NavStack and manual stack implementations.
+### Zone 2: Capabilities (Backend Contracts)
+- [capabilities/README.md](capabilities/README.md) - **Start here** - Required vs optional capabilities
+- [capabilities/playback.md](capabilities/playback.md) - Layer 1: Play/pause/seek (required)
+- [capabilities/queue.md](capabilities/queue.md) - Layer 1: Queue operations (required)
+- [capabilities/discovery.md](capabilities/discovery.md) - Layer 1: Search/browse (required)
+- [capabilities/playlists.md](capabilities/playlists.md) - Layer 2: Playlist CRUD (optional)
+- [capabilities/sync.md](capabilities/sync.md) - Layer 2: 2-way cloud sync (optional)
+- [capabilities/library-cache.md](capabilities/library-cache.md) - Layer 2: Caching pattern (optional)
+- [capabilities/lyrics.md](capabilities/lyrics.md) - Layer 2: Lyrics fetching (optional)
+
+### Zone 3: Features (End-to-end Flows)
+- [features/search.md](features/search.md) - Query to results flow
+- [features/playback.md](features/playback.md) - Selection to audio flow
+- [features/queue.md](features/queue.md) - Queue management flow
+- [features/navigation.md](features/navigation.md) - Pane navigation flow
+- [features/library.md](features/library.md) - Library browsing and management
+
+### Backends (Implementation-Specific)
+- [backends/reference/README.md](backends/reference/README.md) - **Contributor guide** - How to add a backend
+- [backends/youtube/README.md](backends/youtube/README.md) - YouTube Music implementation
+- [arch/youtube-integration.md](arch/youtube-integration.md) - ytmapi adapter, quirks
+- [arch/playback-engine.md](arch/playback-engine.md) - MPV, audio cache, extraction
+
+### Reference
+- [CODEBASE_MAP.md](CODEBASE_MAP.md) - File structure
+- [VISION.md](VISION.md) - Project goals
+- [adr/](adr/) - Architecture decision records
+
+## Layer Boundaries
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          ContentView<C>                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  Generic over C: ContentViewable trait (defined in domain/content.rs)  │
-│                                                                         │
-│  struct ContentView<C: ContentViewable> {                               │
-│      stack: Vec<ContentLevel<C>>,                                       │
-│  }                                                                      │
-│                                                                         │
-│  struct ContentLevel<C> {                                               │
-│      content: C,                                                        │
-│      section_list: SectionList,                                         │
-│  }                                                                      │
-│                                                                         │
-│  trait ContentViewable: Clone + Debug + Send + 'static {                │
-│      fn title(&self) -> &str;                                           │
-│      fn content_id(&self) -> &str;                                      │
-│      fn to_content_details(&self) -> ContentDetails;                    │
-│  }                                                                      │
-│                                                                         │
-│  Methods:                                                               │
-│  ────────                                                               │
-│  push(content: C)           Push new content onto stack                 │
-│  pop() -> bool              Pop stack, returns false if at bottom       │
-│  clear()                    Clear all content                           │
-│  has_content() -> bool      Check if stack is non-empty                 │
-│  stack_depth() -> usize     Get stack size                              │
-│                                                                         │
-│  handle_key(key, ctx) -> ContentAction                                  │
-│    Delegates to SectionList, translates SectionAction to ContentAction  │
-│                                                                         │
-│  render(frame, area, ctx)                                               │
-│    Renders current level's SectionList                                  │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-
-ContentViewable Implementations (in domain/content.rs):
-────────────────────────────────────────────────────────
-
-impl ContentViewable for ArtistContent { ... }
-impl ContentViewable for AlbumContent { ... }
-impl ContentViewable for PlaylistContent { ... }
-impl ContentViewable for SearchResultsContent { ... }
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│     UI      │────▶│   Domain    │◀────│   Backend   │
+│  (panes)    │     │ (MediaItem) │     │ (ytmapi)    │
+└─────────────┘     └─────────────┘     └─────────────┘
+      │                   ▲                   ▲
+      │                   │                   │
+      │ Uses              │ Shared            │ Produces
+      │                   │                   │
+      └───────────────────┴───────────────────┘
 ```
 
----
+**Unified Type System**: `MediaItem` is the shared vocabulary. Backends convert their internal types (e.g., `ytmapi::Video`) directly into `MediaItem` before returning them. The "Lossy Adapter Chain" has been eliminated; domain types flow directly through the IPC protocol.
 
-## SectionList - The Facade
+## Quick Start for Contributors
 
-SectionList provides a single handle_key() entry point that encapsulates
-all vim-style key handling logic.
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           SectionList                                    │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  struct SectionList {                                                   │
-│      sections: Vec<SectionView>,         // Preserved structure         │
-│      flat_items: Vec<DetailItem>,        // Cached for navigation       │
-│      list_view: InteractiveListView,     // State management            │
-│      title: String,                                                     │
-│  }                                                                      │
-│                                                                         │
-│  KEY METHOD:                                                            │
-│  ───────────                                                            │
-│                                                                         │
-│  fn handle_key(&mut self, key: &mut KeyEvent, ctx: &Ctx) -> SectionAction│
-│                                                                         │
-│  This ONE method handles ALL key logic:                                 │
-│  • Mode checking (Normal/Find/Edit)                                     │
-│  • Navigation (j/k/G/gg/Ctrl-d/u)                                       │
-│  • Find mode (/, n/N, Esc to clear)                                     │
-│  • Section navigation (Tab/Shift-Tab)                                   │
-│  • Selection (Enter -> Select(item))                                    │
-│  • Marks (Space)                                                        │
-│  • Esc/Backspace priority handling                                      │
-│                                                                         │
-│  Returns SectionAction (not PaneAction) for separation of concerns.    │
-│                                                                         │
-│  enum SectionAction {                                                   │
-│      Handled,              // Key was handled                           │
-│      Select(DetailItem),   // Enter pressed on item                     │
-│      Mark(Vec<usize>),     // Items marked                              │
-│      BackPane,             // Esc with nothing to clear                 │
-│      BackInternal,         // Backspace with nothing to pop             │
-│      Passthrough,          // Key not handled                           │
-│  }                                                                      │
-│                                                                         │
-│  SECTION NAVIGATION:                                                    │
-│  ───────────────────                                                    │
-│                                                                         │
-│  Tab        → Jump to first item of next section                        │
-│  Shift-Tab  → Jump to first item of previous section                    │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Action Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           ACTION FLOW                                    │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  Key Event                                                              │
-│      │                                                                  │
-│      ▼                                                                  │
-│  Navigator                                                              │
-│      │                                                                  │
-│      ├── mode == Normal? Check 1/2/3 hotkeys                           │
-│      │                                                                  │
-│      ▼                                                                  │
-│  Pane.handle_key()                                                      │
-│      │                                                                  │
-│      ▼                                                                  │
-│  ContentView.handle_key()                                               │
-│      │                                                                  │
-│      ▼                                                                  │
-│  SectionList.handle_key()                                               │
-│      │                                                                  │
-│      ▼                                                                  │
-│  SectionAction                                                          │
-│      │                                                                  │
-│      │  ┌────────────────┬────────────────┬────────────────┐           │
-│      │  │                │                │                │           │
-│      ▼  ▼                ▼                ▼                ▼           │
-│  Handled    Select(item)     BackPane       BackInternal               │
-│      │           │               │               │                     │
-│      │           ▼               │               ▼                     │
-│      │     ContentView           │          ContentView                 │
-│      │     translates to         │          tries pop()                │
-│      │     ContentAction         │               │                     │
-│      │           │               │          ┌────┴────┐                │
-│      │           ▼               │          ▼         ▼                │
-│      │   ┌───────────────┐       │       Success   Failure             │
-│      │   │Activate(item) │       │          │         │                │
-│      │   └───────┬───────┘       │          ▼         ▼                │
-│      │           │               │       Handled   BackStage          │
-│      │           ▼               │                    │                │
-│      │     Pane.resolve_action() │                    │                │
-│      │           │               │                    │                │
-│      │           ▼               ▼                    ▼                │
-│      │       PaneAction      PaneAction           PaneAction           │
-│      │           │               │                    │                │
-│      │           └───────────────┼────────────────────┘                │
-│      │                           │                                     │
-│      ▼                           ▼                                     │
-│  Navigator.handle_pane_action()                                        │
-│      │                                                                  │
-│      ├── NavigateTo(entity) → fetch content, push to DetailPane        │
-│      ├── BackPane → pop history, switch pane                           │
-│      ├── Play(song) → convert to Intent, dispatch to handlers          │
-│      ├── PlayAll → convert to Intent, dispatch to handlers             │
-│      ├── Enqueue → convert to Intent, dispatch to handlers             │
-│      └── Execute(Intent) → dispatch directly to handlers               │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Action System (Intent → Dispatcher → Handler)
-
-The action system provides a unified way to handle user actions across panes.
-Instead of each pane implementing its own action logic, they build an Intent
-and let the ActionDispatcher dispatch to appropriate handlers.
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         ACTION SYSTEM                                    │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  PaneAction::Play(song) / PlayAll / Enqueue / Execute(Intent)          │
-│      │                                                                  │
-│      ▼                                                                  │
-│  Navigator.handle_pane_action()                                         │
-│      │                                                                  │
-│      │  Converts to Intent { action: IntentKind, selection: Selection } │
-│      │                                                                  │
-│      ▼                                                                  │
-│  ActionDispatcher.dispatch(&Intent, ctx)                                │
-│      │                                                                  │
-│      │  Handlers called in priority order (highest first)              │
-│      │                                                                  │
-│      ├───────────────────────────────────────────────────────┐         │
-│      ▼                   ▼                   ▼               ▼         │
-│  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐    │
-│  │TogglePlay  │   │PlayHandler │   │QueueHandler│   │SaveHandler │    │
-│  │  Handler   │   │            │   │            │   │            │    │
-│  │ (pri: 10)  │   │ (pri: 0)   │   │ (pri: 0)   │   │ (pri: 0)   │    │
-│  └────────────┘   └────────────┘   └────────────┘   └────────────┘    │
-│         │                │                │               │            │
-│         ▼                ▼                ▼               ▼            │
-│      ┌────────────────────────────────────────────────────────┐       │
-│      │                    HandleResult                         │       │
-│      │  Done          - Action handled successfully            │       │
-│      │  NotApplicable - Handler can't handle, try next         │       │
-│      │  Skip          - Silently pass to next handler          │       │
-│      └────────────────────────────────────────────────────────┘       │
-│                                                                         │
-│  EXTENSIBILITY:                                                         │
-│  ──────────────                                                         │
-│  • Add YouTubePlayHandler with priority 5 to intercept Play intents    │
-│  • Add LoggingHandler with priority 100 for analytics                  │
-│  • Backend-specific handlers can override default behavior             │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
-### Intent and Selection
-
-```rust
-// The kind of action the user wants to perform
-enum IntentKind {
-    Play,              // Play selected content
-    TogglePlayback,    // Toggle play/pause (no selection needed)
-    AddToQueue,        // Add to queue
-    RemoveFromQueue,   // Remove from queue
-    MoveUp,            // Move up in queue
-    MoveDown,          // Move down in queue
-    SaveToLibrary,     // Save to library
-}
-
-// User intent: what action on what selection
-struct Intent {
-    action: IntentKind,
-    selection: Selection,
-}
-
-// A selection of items to act upon
-struct Selection {
-    items: Vec<DetailItem>,
-}
-
-impl Selection {
-    fn is_empty(&self) -> bool;
-    fn songs_cloned(&self) -> Vec<Song>;
-    fn has_only(&self, types: &[ContentType]) -> bool;
-    fn find_song_index(&self, uri: &str) -> Option<usize>;
-}
-```
-
-### Layer Separation (UI vs Domain)
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         LAYER SEPARATION                                 │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  UI Layer (ListItem) - ui/widgets/list_item.rs                         │
-│  ─────────────────────────────────────────────                         │
-│  Used for LIST RENDERING. Non-actionable items included.               │
-│                                                                         │
-│  enum ListItem {                                                        │
-│      Content(DetailItem),  // Wraps actionable domain item              │
-│      Header(String),       // Section header (non-focusable)            │
-│      Spacer,               // Visual spacing                            │
-│  }                                                                      │
-│                                                                         │
-│  ─────────────────────────────────────────────────────────────────────  │
-│                                                                         │
-│  Domain Layer (DetailItem) - domain/detail_item.rs                     │
-│  ─────────────────────────────────────────────────                     │
-│  Used for ACTION HANDLING. Only actionable content.                    │
-│                                                                         │
-│  enum DetailItem {                                                      │
-│      Song(Song),           // Playable content                          │
-│      Ref(ContentRef),      // Navigable reference (album, artist, etc.) │
-│      Header { title }      // DEPRECATED - use ListItem::Header         │
-│  }                                                                      │
-│                                                                         │
-│  Selection is built from DetailItem, never ListItem.                   │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Data Types
-
-```rust
-// Pane identification
-enum PaneId {
-    Tab(TabId),
-    Detail(DetailId),
-}
-
-enum TabId { Search, Queue, Library }
-enum DetailId { Artist, Album, Playlist }
-
-// Input modes
-enum InputMode {
-    Normal,   // Navigation
-    Edit,     // Typing in text input (SearchPane)
-    Find,     // Typing find query
-}
-
-// Section-level actions (from SectionList)
-enum SectionAction {
-    Handled,              // Key was handled internally
-    Select(DetailItem),   // Item selected (Enter)
-    Mark(Vec<usize>),     // Items marked
-    BackPane,             // Esc with nothing to clear
-    BackInternal,         // Backspace with nothing to pop
-    Passthrough,          // Key not handled
-}
-
-// Content-level actions (from ContentView)
-enum ContentAction {
-    Handled,                         // Handled internally
-    NavigateTo(EntityRef),           // Navigate to entity
-    BackPane,                        // Go back to previous pane
-    BackStage,                       // Go back to previous stage (TabPane)
-    Play(Song),                      // Play single song
-    PlayAll { songs: Vec<Song>, start_index: usize },
-    Enqueue(Vec<Song>),              // Add to queue
-}
-
-// Pane-level actions (to Navigator)
-enum PaneAction {
-    Handled,
-    NavigateTo(EntityRef),
-    BackPane,
-    Play(Song),                                  // Converted to Intent internally
-    PlayAll { songs: Vec<Song>, start_index },   // Converted to Intent internally
-    Enqueue(Vec<Song>),                          // Converted to Intent internally
-    Execute(Intent),                             // Direct Intent execution
-}
-
-// Entity reference for navigation
-struct EntityRef {
-    entity_type: DetailId,
-    id: String,
-    name: String,
-}
-```
-
----
-
-## File Structure
-
-```
-rmpc/src/
-├── actions/                         # Action System (Intent → Dispatcher → Handler)
-│   ├── mod.rs                       # Public exports
-│   ├── intent.rs                    # IntentKind, Intent, Selection
-│   ├── dispatcher.rs                # ActionDispatcher
-│   ├── handler.rs                   # Handler trait, HandleResult
-│   └── handlers/
-│       ├── mod.rs                   # Handler registrations
-│       ├── play.rs                  # PlayHandler
-│       ├── playback.rs              # TogglePlaybackHandler
-│       ├── queue.rs                 # QueueHandler
-│       └── save.rs                  # SaveHandler
-│
-├── ui/
-│   ├── mod.rs                       # Ui struct, event routing
-│   │
-│   ├── panes/
-│   │   ├── mod.rs                   # Pane traits, pane registration
-│   │   ├── navigator_types.rs       # NavigatorPane, TabPane, DetailPane traits
-│   │   ├── navigator.rs             # Navigator controller (owns ActionDispatcher)
-│   │
-│   │   ├── search_pane_v2.rs        # SearchPane (uses InputContentView)
-│   │   ├── queue_pane_v2.rs         # QueuePane (uses ContentView)
-│   │   ├── library_tab.rs           # LibraryPane (uses ContentView)
-│   │   │
-│   │   ├── artist_detail.rs         # ArtistDetailPane (thin wrapper)
-│   │   ├── album_detail.rs          # AlbumDetailPane (thin wrapper)
-│   │   └── playlist_detail.rs       # PlaylistDetailPane (thin wrapper)
-│   │
-│   └── widgets/
-│       ├── content_view.rs          # ContentView<C> - unified stacking
-│       ├── input_content_view.rs    # InputContentView - input + content
-│       ├── section_list.rs          # SectionList with handle_key(), get_selection()
-│       ├── selectable_list.rs       # Core navigation state
-│       ├── list_view_state.rs       # Selection, scroll, marks
-│       ├── list_item.rs             # ListItem UI wrapper (Header/Spacer/Content)
-│       ├── find_state.rs            # Find mode state
-│       └── item_list.rs             # Item rendering widget
-│
-├── domain/
-│   ├── content.rs                   # ContentViewable trait, ArtistContent, etc.
-│   ├── detail_item.rs               # DetailItem enum (Song/Ref, deprecated Header)
-│   ├── display.rs                   # ListItemDisplay trait
-│   └── song.rs                      # Song struct
-│
-└── backends/
-    └── ...
-```
-
----
-
-## Adding New Pane
-
-### Add New TabPane (e.g., History)
-
-```
-1. Create domain/history.rs with HistoryContent implementing Content
-2. Create ui/panes/history_pane.rs implementing TabPane
-   - Uses ContentView<HistoryContent>
-   - ~60 lines of code
-3. Add TabId::History to enum
-4. Register in Navigator
-5. Assign hotkey (e.g., 4)
-
-Files: 3-4
-Lines: ~100
-```
-
-### Add New DetailPane (e.g., Podcast)
-
-```
-1. Create domain/podcast.rs with PodcastContent implementing Content
-2. Create ui/panes/podcast_detail.rs implementing DetailPane
-   - Uses ContentView<PodcastContent>
-   - ~40 lines of code
-3. Add DetailId::Podcast to enum
-4. Register in Navigator
-
-Files: 3
-Lines: ~80
-```
-
----
-
-## Playback Actions
-
-When a song item is selected (Enter pressed):
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         PLAYBACK BEHAVIOR                                │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  Song is selected (Enter pressed):                                      │
-│                                                                         │
-│  1. Check if song is currently playing                                  │
-│     └── YES: Toggle play/pause                                          │
-│     └── NO:  Continue to step 2                                         │
-│                                                                         │
-│  2. Clear queue (if not empty and different from current)               │
-│                                                                         │
-│  3. Add song to queue                                                   │
-│                                                                         │
-│  4. Play the song                                                       │
-│                                                                         │
-│                                                                         │
-│  Multiple songs selected (marks + Enter):                               │
-│                                                                         │
-│  1. Clear queue                                                         │
-│  2. Add all marked songs to queue                                       │
-│  3. Play from the position of the selected song                         │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Key Bindings Summary
-
-| Context | Key | Action |
-|---------|-----|--------|
-| **Global** | 1/2/3 | Switch to TabPane (only in Normal mode) |
-| **Normal** | Esc | Clear find, or back to prev pane |
-| **Normal** | Backspace | Pop stack / back stage |
-| **Normal** | / | Enter Find mode |
-| **Normal** | n/N | Next/prev find match |
-| **Normal** | j/k | Navigate list |
-| **Normal** | G/gg | Jump to bottom/top |
-| **Normal** | Ctrl-d/u | Half page down/up |
-| **Normal** | Tab | Jump to next section |
-| **Normal** | Shift-Tab | Jump to previous section |
-| **Normal** | Enter | Activate selected item |
-| **Normal** | Space | Toggle mark |
-| **Find** | chars | Add to query |
-| **Find** | Backspace | Delete char |
-| **Find** | Enter | Confirm, exit, keep highlights |
-| **Find** | Esc | Cancel, exit, clear highlights |
-| **Edit** | chars | Add to input |
-| **Edit** | Backspace | Delete char |
-| **Edit** | Enter | Submit |
-| **Edit** | Esc | Exit Edit mode |
-
----
-
-## Migration from Legacy
-
-### Deprecated Components
-
-The following are deprecated and will be removed:
-
-| Component | Replaced By |
-|-----------|-------------|
-| `NavStack<T>` | `ContentView<C>` |
-| `flatten_content()` | `build_sections()` via Content trait |
-| Manual stack in each pane | `ContentView<C>` stack |
-
-### Migration Path
-
-1. ✅ Create `ContentView<C>` as unified component
-2. ✅ Add `handle_key()` to `SectionList`
-3. ✅ Refactor DetailPanes to use ContentView
-4. ✅ Refactor SearchPaneV2 to use ContentView
-5. ✅ Refactor SearchPaneV2 to use InputContentView
-6. ✅ Clean up (actor.rs deleted, Navigator integrated into ui/mod.rs)
+1. Read [VISION.md](VISION.md) for project goals
+2. Find your task in "Where to Look" above
+3. Read the linked feature/primitive docs
+4. Check [CODEBASE_MAP.md](CODEBASE_MAP.md) for file locations
+5. Follow existing patterns in similar code

@@ -1,6 +1,6 @@
 # Project Status
 
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-01-02
 **Status**: Core Playable - Daily Use Ready
 
 ---
@@ -9,7 +9,7 @@
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| **Navigator** | ✅ Complete | Central UI controller, pane routing |
+| **Navigator** | 🔄 In Refactor | Config-driven tab architecture (see handoff) |
 | **ContentView** | ✅ Complete | Stack management for drilling |
 | **InteractiveListView** | ✅ Complete | Selection, marks, find mode |
 | **BackendDispatcher** | ✅ Complete | Routes to MPD/YouTube |
@@ -45,7 +45,13 @@
 |--------|-------|
 | **Done** | 27 |
 | **To Do** | 7 |
-| **In Progress** | 0 |
+| **In Progress** | 1 |
+
+### In Progress
+
+| ID | Title | Description |
+|----|-------|-------------|
+| nav-refactor | Navigator Architecture Refactor | Fix hardcoded tabs, consolidate state in AppState |
 
 ### Remaining Tasks
 
@@ -82,6 +88,7 @@ cd rmpc && cargo test --lib
 
 | Date | Milestone |
 |------|-----------|
+| Jan 02 | Navigator architecture refactor (planning) |
 | Dec 27 | Navigator integration complete, docs synced |
 | Dec 23 | Backend refactor complete (api traits) |
 | Dec 22 | File reorganization (src/backends/) |
