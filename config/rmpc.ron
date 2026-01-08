@@ -3,6 +3,7 @@
 #![enable(unwrap_variant_newtypes)]
 (
     backend: youtube,
+    cache_dir: "/tmp/rmpc_cache",
     youtube: (
         auth_file: Some("/home/phucdnt/.config/rmpc/cookie.txt"),
     ),

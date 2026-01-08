@@ -18,3 +18,10 @@ bun.lock
 mise.toml
 .osgrep
 .claude
+
+# bv (beads viewer) local config and caches
+.bv/
+
+# Ephemeral planning files (decisions distilled to docs/)
+backlog/
+docs/plans/
