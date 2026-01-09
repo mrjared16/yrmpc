@@ -29,7 +29,7 @@ For comprehensive documentation, see **[CLAUDE.md](CLAUDE.md)** - the canonical 
 
 ## Project Status
 
-See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) for current state.
+See [docs/VISION.md](docs/VISION.md) for project goals and roadmap.
 
 ## License
 

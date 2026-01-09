@@ -26,7 +26,7 @@ This document provides a high-level overview and routes you to detailed document
 │  │  │  │  ┌─────────────────────────────────────────────────┐││  │  │
 │  │  │  │  │              SectionList                        │││  │  │
 │  │  │  │  │  ┌─────────────────────────────────────────────┐│││  │  │
-│  │  │  │  │  │         InteractiveListView                 ││││  │  │
+│  │  │  │  │  │         SelectableList                          ││││  │  │
 │  │  │  │  │  └─────────────────────────────────────────────┘│││  │  │
 │  │  │  │  └─────────────────────────────────────────────────┘││  │  │
 │  │  │  └─────────────────────────────────────────────────────┘│  │  │
@@ -133,9 +133,7 @@ Content is organized into typed sections for flexible rendering:
 - [arch/playback-engine.md](arch/playback-engine.md) - MPV, audio cache, extraction
 
 ### Reference
-- [CODEBASE_MAP.md](CODEBASE_MAP.md) - File structure
 - [VISION.md](VISION.md) - Project goals
-- [adr/](adr/) - Architecture decision records
 
 ## Layer Boundaries
 
@@ -158,5 +156,4 @@ Content is organized into typed sections for flexible rendering:
 1. Read [VISION.md](VISION.md) for project goals
 2. Find your task in "Where to Look" above
 3. Read the linked feature/primitive docs
-4. Check [CODEBASE_MAP.md](CODEBASE_MAP.md) for file locations
-5. Follow existing patterns in similar code
+4. Follow existing patterns in similar code

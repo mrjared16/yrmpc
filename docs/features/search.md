@@ -228,4 +228,4 @@ Search operations interact with the YouTube backend, which uses a polling-based 
 - [docs/arch/youtube-integration.md](../arch/youtube-integration.md) - Adapter layer, resilience patterns
 - [docs/arch/section-model.md](../arch/section-model.md) - SectionList architecture
 - [docs/arch/ui-navigation.md](../arch/ui-navigation.md) - ContentView, pane navigation
-- [docs/CODEBASE_MAP.md](../CODEBASE_MAP.md) - File structure reference
+- [docs/ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture overview
