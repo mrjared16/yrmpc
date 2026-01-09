@@ -60,7 +60,7 @@ Defines how user actions flow through the system: from key press to Intent to ha
         │
         ▼
 2. Pane::handle_key() matches keybinding
-   └─► Gets current selection from InteractiveListView
+   └─► Gets current selection from SelectableList
    └─► Calls resolve_action() to build Intent
    └─► Returns PaneAction::Execute(intent)
         │
@@ -144,6 +144,25 @@ enum PaneAction {
 - **Rationale**: All panes should produce Intents in a consistent way from their selection state.
 - **Refactor**: Renamed `interpret_activation` → `resolve_action` → `create_intent`.
 - **Refactor**: Renamed `InteractiveListView` → `SelectableList`.
+
+### 6. Three-Layer Backend Trait Architecture (from ADR-backend-refactor)
+- **Decision**: Organize backend traits into three layers:
+  1. **Universal** (`api::*`): All backends must implement (Playback, Queue basics)
+  2. **Optional** (`api::optional::*`): Backends may implement (Discovery, Playlists)
+  3. **Backend-specific** (`mpd::specific::*`): Unique features per backend
+- **Rationale**: Interface segregation principle. UI code never checks backend type - it queries capabilities via `Capability` enum.
+- **Impact**: No `if backend == YouTube` branches in UI. Feature availability is declarative.
+
+### 7. Deprecated MusicBackend Trait
+- **Decision**: Keep `MusicBackend` trait for compatibility but mark deprecated. New code uses `api::*` traits.
+- **Rationale**: Gradual migration path. Existing code continues to work while new features use cleaner API.
+- **Naming**: `PlayerController` → `BackendDispatcher`, `MpdClientExt` → `BackendActions`.
+
+### 8. Query Result Type Matching (from ADR-query-result-state-updates)
+- **Decision**: Match on `QueryResult` TYPE (not ID) to trigger automatic state updates.
+- **Mechanism**: Any query returning `QueryResult::Queue` automatically updates `ctx.queue`. No explicit refresh calls needed.
+- **Rationale**: Self-documenting, DRY, impossible to forget refresh. Backend-agnostic - works for MPD and YouTube identically.
+- **Impact**: Removed scattered `refresh_queue()` calls throughout codebase.
 
 ## Key Files
 

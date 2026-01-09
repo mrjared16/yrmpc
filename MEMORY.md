@@ -95,6 +95,11 @@ YouTube API → Song.metadata["type"] → DetailItem::from() → type_icon() →
 
 **Testing**: Test ENTIRE data flow, not component contracts. Wrong layer = hidden bugs.
 
+**Rich List Patterns**:
+- *Dual-Trait*: Both `ListItemDisplay` and `DirStackItem` need `is_focusable()` - headers unfocusable in both contexts
+- *Metadata Flow*: `secondary_text()` checks subtitle BEFORE artist/album fallback (order matters)
+- *Performance Guard*: Navigation loops have iteration limit to prevent infinite loops when skipping headers
+
 ---
 
 ## Current State (2026-01-03)
@@ -150,6 +155,28 @@ MediaItem migration • Action system integration • QueueStore migration (40%)
 **Reality**: Unconditional unsafe impl can cause UB if inner type isn't thread-safe.
 
 **Fix**: Delete unsafe impls and rely on auto-derivation, or add `E: Send + Sync` bounds.
+
+### Idle Loop Starvation (CPU Fix)
+**Problem**: 146% CPU when idle - both `idle` and `request` threads spinning.
+
+**Root Cause**: In `core/client.rs`, idle loop used `continue` on timeout, preventing client from yielding to request thread.
+
+**Fix**: Use `break vec![]` instead of `continue` on timeout to yield client.
+
+**Pattern**: In dual-backend architectures, ensure timeout-based yields work even when interrupt mechanisms are no-ops.
+
+### Composable Extractors via Decorators
+**Problem**: Single `StreamExtractor` enum with sequential fallback was hard to extend.
+
+**Solution**: Trait-based composition with decorators:
+```rust
+let extractor = FallbackExtractor::new(
+    CachedExtractor::new(YtxExtractor::new(), 1000),
+    YtDlpExtractor::new()
+);
+```
+
+**Pattern**: Decorator pattern enables flexible feature composition without modifying core types.
 
 ### Navigator Migration (Dec 2025)
 **Mistake**: Marked task "done" based on structural AC (routing added, tests pass) without behavior verification.
@@ -213,4 +240,4 @@ use crate::backends::PlayerController;  // → BackendDispatcher
 
 ## Documentation
 
-`CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | Beads CLI (`bd`) - Task management | `docs/ADR-*.md` - Design decisions
+`CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | Beads CLI (`bd`) - Task management | `docs/arch/*.md` - Architectural decisions

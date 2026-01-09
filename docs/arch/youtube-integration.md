@@ -229,5 +229,5 @@ pub fn handle_get_library(_category: &str) -> ServerResponse {
 
 - [docs/features/search.md](../features/search.md) - Full search flow including UI
 - [docs/arch/playback-engine.md](playback-engine.md) - URL extraction, MPV integration
-- [docs/CODEBASE_MAP.md](../CODEBASE_MAP.md) - File structure reference
+- [docs/ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture overview
 - [ytmapi-yrmpc README](../../ytmapi-yrmpc/README.md) - Submodule documentation

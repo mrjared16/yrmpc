@@ -101,3 +101,61 @@ bd sync --from-main                   # Pull beads updates
 | Protocol/API changes | Yes |
 | UI-only (panes, widgets) | No - just rebuild TUI |
 | Config changes | Yes |
+
+---
+
+## Authentication Context (YouTube)
+
+**Why auth matters for debugging:** If YouTube features fail (search, playback), cookies are often the cause.
+
+**Cookie location:** `~/.config/rmpc/cookie.txt` (Netscape format)
+
+**Critical cookies:** `SAPISID`, `__Secure-3PAPISID`
+
+**Common auth errors in logs:**
+- `"No cookies found"` → File missing or wrong path
+- `"401 Unauthorized"` → Cookies expired, need refresh
+- `"403 Forbidden"` → Missing critical cookies
+
+**For humans setting up auth:** See [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for browser export instructions.
+
+---
+
+## Debugging
+
+### Enable Logs
+```bash
+RUST_LOG=debug ./target/release/rmpc 2> debug.log
+```
+
+### Check MPV Process
+```bash
+pgrep -af mpv                    # Is MPV running?
+ls -la /tmp/rmpc-mpv.sock        # Check socket
+echo '{ "command": ["get_property", "media-title"] }' | socat - /tmp/rmpc-mpv.sock
+```
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| "No cookies found" | Check `~/.config/rmpc/cookie.txt` exists, verify Netscape format |
+| "MPV not found" | Install MPV, check PATH |
+| Search returns no results | Check logs, verify cookies not expired |
+| Can't navigate to artist/album | Check metadata["type"], verify browse_id format |
+
+---
+
+## Hot Reload & Profiling
+
+```bash
+# Hot reload (cargo-watch)
+cargo install cargo-watch
+cargo watch -x build
+
+# CPU profiling
+perf record ./target/release/rmpc && perf report
+
+# Memory profiling
+valgrind --leak-check=full ./target/debug/rmpc
+```

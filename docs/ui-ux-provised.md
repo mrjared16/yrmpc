@@ -368,7 +368,7 @@ Protocols render to fixed rectangular regions, NOT inline with text.
 
 ## 7. Implementation Architecture (Approved)
 
-> **See also:** [ADR-rich-list-ui.md](ADR-rich-list-ui.md) for decision rationale.
+> **See also:** [arch/ui-navigation.md](arch/ui-navigation.md) for decision rationale.
 
 ### 7.1 Hybrid Design: Simple API + Internal Element Tree
 

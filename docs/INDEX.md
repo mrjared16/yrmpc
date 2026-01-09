@@ -52,15 +52,10 @@
 ### Reference
 | File | Content |
 |------|---------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Routing-only overview |
-| [CODEBASE_MAP.md](CODEBASE_MAP.md) | File structure reference |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture overview |
 | [VISION.md](VISION.md) | Project goals and roadmap |
-| [adr/](adr/) | Architecture decision records |
-
-### Legacy (preserved for reference)
-| File | Content |
-|------|---------|
-| [ARCHITECTURE_OLD.md](ARCHITECTURE_OLD.md) | Original 999-line comprehensive doc |
+| [USER_GUIDE.md](USER_GUIDE.md) | End-user documentation |
+| [YOUTUBE_API.md](YOUTUBE_API.md) | YouTube Music API reference |
 
 ## By Task
 
@@ -87,7 +82,6 @@ yrmpc/
 │   ├── backends/           # Implementation-specific (NEW)
 │   │   ├── reference/      # Contributor template
 │   │   └── youtube/        # YouTube implementation
-│   └── adr/                # Decision records
 ├── rmpc/                   # Main application (submodule)
 │   └── src/
 │       ├── backends/youtube/  # YouTube integration

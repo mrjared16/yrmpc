@@ -118,7 +118,7 @@ UI layer deals with HOW TO DISPLAY (headers, spacing, layout)
    └─► Returns flat Vec<ListItem> for rendering
         │
         ▼
-5. InteractiveListView renders items
+5. SelectableList renders items
    └─► Skips Header for selection (non-selectable)
    └─► Renders Content items normally
 ```
@@ -149,6 +149,26 @@ UI layer deals with HOW TO DISPLAY (headers, spacing, layout)
 2.  **Domain**: Stores this natural order faithfully.
 3.  **UI**: Applies `config.section_order` only at the presentation layer (`apply_config_order()`).
 **Why**: This ensures that search relevance is not destroyed by the domain model, while still giving users control over the final display.
+
+### 4. SelectableList is Pure Navigation (from ADR-interactive-layout-system)
+- **Decision**: `SelectableList` (formerly InteractiveListView) handles ONLY navigation and rendering. NO action interpretation.
+- **Rationale**: Actions belong in the Pane or Modal, not the View. The same key (Enter) means different things in different contexts (Search: navigate, Queue: play).
+- **Impact**: Views are reusable across contexts. Panes own the semantic meaning of keypresses.
+
+### 5. Coordination Layer for List Operations
+- **Decision**: Introduce `list_ops.rs` as coordination layer between panes and views.
+- **Rationale**: Prevents glue code duplication. Common patterns (bulk select, move, delete) are shared.
+- **Pattern**: `QueueListBehavior` trait abstracts queue operations for both `QueuePaneV2` (full pane) and `QueueModal` (popup).
+
+### 6. Selection via Indices, Not References (from ADR-interactive-layout-system)
+- **Decision**: Store selection as indices (`Vec<usize>` from `marked_indices()`) instead of holding references to items.
+- **Rationale**: Avoids lifetime/borrow checker conflicts. Mutable operations (delete, move) don't invalidate selection.
+- **Benefit**: Same key works for single-item and bulk operations. Context-aware action dispatch.
+
+### 7. SectionKey Enum for Type Safety (from ADR-section-as-container)
+- **Decision**: Use `SectionKey` enum for section identifiers with known variants.
+- **Rationale**: Compile-time exhaustiveness checking ensures all section types are handled. New section types require explicit variant addition.
+- **Trade-off**: Less runtime flexibility, but catches missing handlers at compile time. Add new variant to `SectionKey` in `domain/content.rs`.
 
 ## Key Files
 

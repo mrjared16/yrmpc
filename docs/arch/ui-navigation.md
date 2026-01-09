@@ -64,7 +64,7 @@ Level 3: HISTORY (Stack push/pop)
 | **DetailPane** | Pushed onto stack, shows entity details | ArtistPane, AlbumPane | Usually `ContentView<BrowsableContent>` |
 
 ### V2 Implementations
-- **SearchPaneV2**: Uses `ContentView<SearchableContent>` + `InteractiveListView` (~290 lines) replacing legacy monolithic ~2000 line implementation. Reuses `InputGroups` for filters.
+- **SearchPaneV2**: Uses `ContentView<SearchableContent>` + `SelectableList` (~290 lines) replacing legacy monolithic ~2000 line implementation. Reuses `InputGroups` for filters.
 - **QueuePane**: Uses `ContentView<QueueContent>` with layered sections (Now Playing, Up Next).
 
 ```rust
@@ -93,13 +93,13 @@ trait NavigatorPane {
 │  │                         SectionList                                │  │
 │  │  ┌─────────────────────────────────────────────────────────────┐  │  │
 │  │  │ Section: "Top Results"                                       │  │  │
-│  │  │   └─► InteractiveListView (items)                           │  │  │
+│  │  │   └─► SelectableList (items)                              │  │  │
 │  │  ├─────────────────────────────────────────────────────────────┤  │  │
 │  │  │ Section: "Songs"                                             │  │  │
-│  │  │   └─► InteractiveListView (items)                           │  │  │
+│  │  │   └─► SelectableList (items)                              │  │  │
 │  │  ├─────────────────────────────────────────────────────────────┤  │  │
 │  │  │ Section: "Albums"                                            │  │  │
-│  │  │   └─► InteractiveListView (items)                           │  │  │
+│  │  │   └─► SelectableList (items)                              │  │  │
 │  │  └─────────────────────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────────────────────┘  │
 │                                                                          │
@@ -142,13 +142,13 @@ trait NavigatorPane {
 The navigation system relies on a unified interactive component library designed for SOLID compliance and OCP (Open-Closed Principle).
 
 ### Core Components
-- **InteractiveListView**: The primary list widget supporting multi-select, paging, and "skip unfocusable" behavior.
+- **SelectableList**: The primary list widget supporting multi-select, paging, and "skip unfocusable" behavior.
 - **ListViewState**: Manages scroll position, scrolloff, and O(1) paging logic efficiently.
 - **FilterState**: Handles in-list filtering with Vim-style navigation (`/` to search, `n`/`N` to jump between matches in Normal mode).
 
 ### Selection Pattern
 To avoid lifetime and borrow checker conflicts common in Rust UI state management, the selection system uses **Indices** rather than references.
-- **Decision**: Store `HashSet<usize>` for selected items instead of holding references to data.
+- **Decision**: Store indices (`Vec<usize>` from `marked_indices()`) for selected items instead of holding references to data.
 - **Benefit**: Decouples selection state from the data source, allowing mutable operations (delete, move) without invalidating selection references.
 
 ### Shared Behaviors
@@ -189,3 +189,43 @@ To avoid lifetime and borrow checker conflicts common in Rust UI state managemen
 - [docs/arch/action-system.md](action-system.md) - PaneAction handling
 - [docs/arch/section-model.md](section-model.md) - SectionList internals
 - [docs/features/search.md](../features/search.md) - SearchPane example
+
+---
+
+## Architectural Decisions (Distilled from ADRs)
+
+### 1. Concrete Pane Fields, Not Dynamic HashMap (from ADR-navigator-design)
+- **Decision**: Navigator owns concrete pane fields (`search_pane: SearchPaneV2`, `queue_pane: QueuePaneV2`) instead of `HashMap<PaneId, Box<dyn NavigatorPane>>`.
+- **Rationale**: 
+  - Stable pane set (~6 panes) doesn't change at runtime
+  - Compile-time type safety catches missing pane handlers
+  - Match exhaustiveness ensures all panes are handled
+  - Zero vtable overhead at 60fps rendering
+- **Trade-off**: Less runtime flexibility for more safety and performance.
+
+### 2. Hybrid Rich List Architecture (from ADR-rich-list-ui)
+- **Decision**: Simple public trait (`ListItemDisplay`) + internal Element tree for complex rendering.
+- **Mechanism**:
+  - `ListItemDisplay` trait: Items implement simple `render()` method
+  - `Element` enum: Internal/private, can change without breaking API
+  - Compact mode: Skips Element tree for fast path (plain text)
+- **Rationale**: Simple public API for implementers, internal flexibility for evolution. Headers use distinct styling (bold yellow).
+
+### 3. Layered SOLID Architecture (from ADR-unified-view-architecture)
+- **Decision**: Five-layer hierarchy with single responsibility per layer:
+  ```
+  Navigator → Pane → ContentView → SectionList → SelectableList
+  ```
+- **Responsibilities**:
+  - **Navigator**: Stack management, tab switching, pane lifecycle
+  - **Pane**: Semantic action interpretation, query orchestration
+  - **ContentView**: Layout, event bubbling (no semantics)
+  - **SectionList**: Section grouping, header injection
+  - **SelectableList**: Item navigation, selection state
+- **Rationale**: SRP per layer, OCP for new panes. Each layer handles its own keys.
+
+### 4. External Navigation Pattern (from ADR-unified-view-architecture)
+- **Decision**: Navigation is always "external" - parent controls child's focus, not internal drilling.
+- **Mechanism**: `ContentView` returns `ContentAction::Activate`, parent Pane decides target.
+- **Move operations**: Use J/K directly (no modal confirmation).
+- **InputContentView**: Composes Input widget + List for search-with-results pattern.

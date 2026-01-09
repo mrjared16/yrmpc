@@ -160,3 +160,33 @@ Rule: UI never directly modifies queue.
 - [docs/features/playback.md](playback.md) - Playback integration
 - [docs/arch/action-system.md](../arch/action-system.md) - Queue actions
 - [docs/arch/section-model.md](../arch/section-model.md) - Queue sections
+
+---
+
+## Architectural Decisions (Distilled from ADR-queue-trait-redesign)
+
+### 1. Three-Layer Queue Trait Architecture
+- **Decision**: Queue operations follow the same three-layer pattern as other backend traits:
+  1. **Layer 1 (Universal)**: Basic queue operations all backends support (add, remove, clear, get_queue)
+  2. **Layer 2 (Optional)**: Advanced features some backends support (shuffle, save as playlist)
+  3. **Layer 3 (Backend-specific)**: Unique features (MPD's consume mode, YouTube's radio mode)
+- **Rationale**: Same interface works identically for MPD and YouTube backends. UI code doesn't branch on backend type.
+
+### 2. ToggleMode Enum for Repeat/Consume States
+- **Decision**: Use `ToggleMode` enum with three states: `Off`, `On`, `Oneshot`.
+- **Rationale**: Both MPD's "single" mode and "consume" mode have three states. A boolean would lose the Oneshot semantics (play once then stop vs repeat forever).
+- **Impact**: UI can display accurate state icons. Backend translates to protocol-specific commands.
+
+### 3. Crossfade and Gapless in Playback Trait
+- **Decision**: Audio effects (crossfade, gapless playback) belong in `api::Playback`, not `api::Queue`.
+- **Rationale**: These affect HOW audio plays, not WHAT is queued. Separation allows backends to support gapless even without queue support.
+
+### 4. Playlists are Optional (Layer 2)
+- **Decision**: Playlist operations (save, load, delete) are Layer 2 optional operations under `api::optional::Playlists`.
+- **Rationale**: Not all backends may support full playlist management. YouTube supports playlists, MPD supports stored playlists - but capability varies.
+- **Usage**: UI checks `backend.supports(Capability::Playlists)` before showing playlist operations.
+
+### 5. Unified Capability Enum
+- **Decision**: Single `Capability` enum covers all optional features across all backends.
+- **Usage**: `backend.supports(Capability::Shuffle)` returns bool. UI hides unavailable features.
+- **Rationale**: Declarative feature detection. No string-based capability checks.
