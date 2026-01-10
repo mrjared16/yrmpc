@@ -172,12 +172,24 @@ play(index):
 
 ### PlaybackStateTracker
 We do NOT rely on MPV's internal state (e.g., `playlist-pos`) for critical logic due to race conditions and inconsistent EOF reporting.
-- **Source of Truth**: `PlaybackStateTracker` (Idle | Loaded | Playing | EndOfFile | Stopped | Paused).
+- **Source of Truth**: `PlaybackStateTracker` with states:
+  - `Idle` - Nothing playing
+  - `Loaded` - Track loaded but not started
+  - `Playing` - Active playback
+  - `PendingAdvance { since, from_position }` - Transitional state during EOF handling
+  - `Stopped` - Explicitly stopped
+  - `Paused` - Paused by user
 - **Queue Index**: `queue.current_index()` is the authoritative position, not MPV.
-- **EOF Handling**: `handle_eof` relies on the Tracker to decide whether to advance, repeat one, or loop (Repeat All).
+- **EOF Handling**: Uses a two-phase commit pattern:
+  1. On `end-file` event, transition to `PendingAdvance`
+  2. Wait for `TrackChanged` event from MPV to confirm new position
+  3. Finalize state to `Playing` or `Idle` based on queue state
+  4. Timeout fallback (2s) if MPV event doesn't arrive
 
 ### Race Condition Prevention
 - **Stop-before-Clear**: When switching tracks, we explicitly call `stop()` before `playlist_clear()` to prevent the "ghost playback" stutter where MPV continues playing the old track while loading the new one.
+- **Event-Driven EOF**: MPV events (`TrackChanged`, `EndFile`) are routed through a typed `InternalEvent` channel. The internal event processor updates queue state BEFORE emitting UI broadcasts, preventing stale metadata display.
+- **Shuffle-Aware Advancement**: End-of-window handling uses `queue.next_index()` which respects shuffle order, not sequential `current + 1`.
 
 ## Key Files
 
