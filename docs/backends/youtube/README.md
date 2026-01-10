@@ -37,10 +37,12 @@ The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` libra
 |-----------|----------|---------|
 | Client | `backends/youtube/client.rs` | IPC with daemon |
 | Server | `backends/youtube/server/` | Request handlers |
+| Orchestrator | `backends/youtube/server/orchestrator.rs` | EOF/track-change state machine |
 | Adapter | `backends/youtube/adapter.rs` | Type conversions |
 | URL Resolver | `backends/youtube/url_resolver.rs` | Video ID → stream URL |
 | Playback Service | `backends/youtube/services/playback_service.rs` | MPV control |
 | Queue Service | `backends/youtube/services/queue_service.rs` | Queue state |
+| Internal Events | `backends/youtube/services/internal_event.rs` | Typed MPV event routing |
 
 ## Resilience Architecture (2024-01)
 
