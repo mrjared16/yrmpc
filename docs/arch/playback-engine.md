@@ -9,53 +9,35 @@ Defines the internal components of the playback system: MPV integration, URL ext
 
 ## Architecture Overview
 
+The playback engine follows a **Two-Layer Architecture** (see [PlayQueue Architecture](play-queue.md) for details).
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         PlaybackService                                  │
+│                       Layer 1: PlayQueue (State)                        │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  Orchestrates: extraction → caching → MPV control                 │   │
-│  │                                                                   │
-│  │  play(song)     → resolve URL → cache → MPV loadfile             │   │
-│  │  pause/resume() → MPV set_property                               │   │
-│  │  seek(pos)      → MPV seek                                       │   │
-│  │  next/prev()    → QueueStore navigate → play()                   │   │
+│  │  Pure State Machine                                              │   │
+│  │  Items, Order, Shuffle/Repeat Modes                              │   │
+│  │  Emits: QueueEvents                                              │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┬─┘
-        │                           │                                    │
-        ▼                           ▼                                    ▼
-┌───────────────────┐   ┌───────────────────┐   ┌───────────────────────┐
-│  CachedExtractor  │   │   AudioCache      │   │      MpvClient        │
-│                   │   │                   │   │                       │
-│  ytx (primary)    │   │  Rolling window   │   │  JSON IPC over socket │
-│  yt-dlp (fallback)│   │  Pre-fetch N next │   │  /tmp/rmpc.sock       │
-│  URL TTL: ~4hrs   │   │  Evict old tracks │   │  Event Loop (Thread)  │
-└───────────────────┘   └───────────────────┘   └───────────────────────┘
-```
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │ Events
+                                    ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         PlaybackService                                  │
+│                       Layer 2: Playback Bridge                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  Orchestrates: extraction → caching → MPV control                 │   │
-│  │                                                                   │   │
-│  │  play(song)     → resolve URL → cache → MPV loadfile             │   │
-│  │  pause/resume() → MPV set_property                               │   │
-│  │  seek(pos)      → MPV seek                                       │   │
-│  │  next/prev()    → QueueStore navigate → play()                   │   │
+│  │  Orchestrator (Event Loop)                                       │   │
+│  │    │                                                             │   │
+│  │    ├──► URL Resolver (ytx/yt-dlp)                                │   │
+│  │    ├──► Audio Prefetcher (Disk Cache)                            │   │
+│  │    ├──► MPV Controller (IPC)                                     │   │
+│  │    └──► PendingAdvance FSM (Transitions)                         │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┬─┘
-        │                           │                                    │
-        ▼                           ▼                                    ▼
-┌───────────────────┐   ┌───────────────────┐   ┌───────────────────────┐
-│  CachedExtractor  │   │   AudioCache      │   │      MpvClient        │
-│                   │   │                   │   │                       │
-│  ytx (primary)    │   │  Rolling window   │   │  JSON IPC over socket │
-│  yt-dlp (fallback)│   │  Pre-fetch N next │   │  /tmp/rmpc.sock       │
-│  URL TTL: ~4hrs   │   │  Evict old tracks │   │                       │
-└───────────────────┘   └───────────────────┘   └───────────────────────┘
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Details
 
-### CachedExtractor
+### URL Resolver & CachedExtractor
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  extract(video_id) → Result<StreamUrl>                                  │
@@ -70,136 +52,58 @@ Defines the internal components of the playback system: MPV integration, URL ext
 │  3. Cache result with TTL (~4 hours, YouTube URL expiry)                │
 │                                                                         │
 │  4. Return URL                                                          │
+│     └─► Hybrid EDL: edl://cache,0,10;stream,10,                         │
+│         (Plays from local cache if available, then streams)             │
 └─────────────────────────────────────────────────────────────────────────┘
-
-Extractor Selection:
-┌──────────┬─────────┬───────────────────────────────────────┐
-│ Extractor│ Speed   │ Notes                                 │
-├──────────┼─────────┼───────────────────────────────────────┤
-│ ytx      │ ~200ms  │ Default. Lightweight Rust binary.     │
-│ yt-dlp   │ ~2-3s   │ Fallback. Spawns Python. Avoid tests. │
-└──────────┴─────────┴───────────────────────────────────────┘
 ```
 
-### Background Extraction (Planned)
-To reduce latency, background URL pre-extraction is planned:
-- Pre-extract URLs via `url_resolver.prefetch()` as tracks enter the queue.
-- Operates on a "best-effort" basis (errors logged, do not block).
+### Audio Prefetcher (Rate-Limited)
+- **Goal**: Minimize latency and prevent buffering.
+- **Trigger**: `ItemsAdded` event or `ItemsRemoved` (cancellation).
+- **Strategy**:
+  - Sequential downloads (token bucket: 1 req/sec).
+  - Priority based on distance from current track.
+  - Stores audio chunks in `~/.cache/rmpc/audio/`.
 
-> **Note**: This is a planned optimization, not yet implemented.
+### MPV Controller & Sync
+The Bridge maintains "What you see is what you hear" via atomic playlist management.
 
-### AudioCache (Rolling Window)
-```
-Queue State:
-  [Song1] [Song2] [Song3] [Song4] [Song5] [Song6]
-              ▲
-         Now Playing
-
-Cache Window (N=2 lookahead):
-  ┌─────────────────────────────────────────┐
-  │ Cached: Song2 (current), Song3, Song4   │
-  │ Pre-fetching: Song3, Song4 in background│
-  │ Evicted: Song1 (already played)         │
-  │ Not cached: Song5, Song6 (too far)      │
-  └─────────────────────────────────────────┘
-
-On track change:
-  1. Shift window forward
-  2. Evict tracks outside window
-  3. Pre-fetch new tracks entering window
-```
-
-### MpvClient (IPC)
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Communication: JSON over Unix socket (/tmp/rmpc.sock)                  │
-│                                                                          │
-│  Commands:                                                               │
-│    loadfile <url> [replace|append]   → Start/queue playback            │
-│    set_property pause true/false     → Pause/resume                     │
-│    seek <seconds> [absolute|relative]→ Seek position                    │
-│    get_property time-pos/duration    → Query playback state             │
-│                                                                          │
-│  Events (observed):                                                      │
-│    end-file           → Track finished, trigger next()                  │
-│    property-change    → Position/duration updates                       │
-│    idle               → Nothing playing                                  │
-└─────────────────────────────────────────────────────────────────────────┘
-
-MPV Launch (daemon mode):
-  mpv --idle --no-video --input-ipc-server=/tmp/rmpc.sock
-```
-
-## Gapless Playback & Queue Management
-
-### Hybrid Queue Architecture (Rolling Prefetch)
-Instead of a simple `loadfile` per track, we use MPV's internal playlist to ensure gapless playback.
-
-1. **Rolling Window**: We maintain a sliding window of the next N tracks (default 3) in MPV's internal playlist.
-2. **Transition**: When a track ends, MPV auto-advances instantly.
-3. **Sync**: We observe `end-file` events to shift our application-side queue window and append the next track to MPV.
-
-### Shuffle Architecture (Planned)
-To support the rolling window prefetch while shuffling:
-- **Strategy**: Pre-computed shuffle order with `shuffled: Vec<usize>` mapping sequential indices to random queue positions.
-- The "rolling window" operates on the *shuffled* index list, allowing MPV to still preload `[current, next, next+1]` efficiently.
-
-> **Note**: This is a planned design. Current shuffle implementation differs.
-
-**Command Sequence:**
-```
-play(index):
-  1. playlist_clear
-  2. loadfile(track[index])
-  3. loadfile(track[index+1]) append
-  4. loadfile(track[index+2]) append
-  5. playlist_play_index(0)
-```
-
-### Queue State & Metadata
-- **Source of Truth**: `AppState` holds the in-memory queue with `QueueItem` metadata. `QueueStore` handles backend-synchronized `Vec<Song>`. Access via `Ctx.queue_store()` accessor.
-- **Metadata Preservation**: We use `enqueue(&Song)` (passing full objects) rather than `add(url)`. This ensures title, artist, album, and thumbnail data are preserved from search results to the queue.
-- **Result-Driven Updates**: Queries returning `QueryResult::Queue(...)` automatically trigger a global state update, ensuring the UI reflects queue changes (add/delete) instantly without manual refreshes.
-
-### Queue UI & Interaction
-- **Rich List Rendering**: Queue uses `ItemListWidget` (Rich List) to display thumbnails and metadata.
-- **Active Track**: Highlighted with **bold** text and `▶` prefix (via `ListItemDisplay::is_playing()`).
-- **Manipulation**: 
-  - **Reorder**: `J`/`K` keys move tracks (modify `AppState` -> sync to Backend).
-  - **Delete**: `d`/`x` keys remove tracks.
+- **On Track Change**: MPV plays file -> Bridge detects `end-file` -> FSM advances state.
+- **On Shuffle Toggle**:
+  - Layer 1 reshuffles `play_order`.
+  - Layer 2 receives `OrderChanged`.
+  - Bridge calculates diff and sends `loadfile ... append` commands to MPV to match new order.
+  - **Invariant**: Current playing track is NEVER stopped during shuffle.
 
 ## State Management & Reliability
 
-### PlaybackStateTracker
-We do NOT rely on MPV's internal state (e.g., `playlist-pos`) for critical logic due to race conditions and inconsistent EOF reporting.
-- **Source of Truth**: `PlaybackStateTracker` with states:
-  - `Idle` - Nothing playing
-  - `Loaded` - Track loaded but not started
-  - `Playing` - Active playback
-  - `PendingAdvance { since, from_position }` - Transitional state during EOF handling
-  - `Stopped` - Explicitly stopped
-  - `Paused` - Paused by user
-- **Queue Index**: `queue.current_index()` is the authoritative position, not MPV.
-- **EOF Handling**: Uses a two-phase commit pattern:
-  1. On `end-file` event, transition to `PendingAdvance`
-  2. Wait for `TrackChanged` event from MPV to confirm new position
-  3. Finalize state to `Playing` or `Idle` based on queue state
-  4. Timeout fallback (2s) if MPV event doesn't arrive
+### PendingAdvance FSM
+We do NOT rely on MPV's internal state for critical logic due to race conditions.
 
-### Race Condition Prevention
-- **Stop-before-Clear**: When switching tracks, we explicitly call `stop()` before `playlist_clear()` to prevent the "ghost playback" stutter where MPV continues playing the old track while loading the new one.
-- **Event-Driven EOF**: MPV events (`TrackChanged`, `EndFile`) are routed through a typed `InternalEvent` channel. The internal event processor updates queue state BEFORE emitting UI broadcasts, preventing stale metadata display.
-- **Shuffle-Aware Advancement**: End-of-window handling uses `queue.next_index()` which respects shuffle order, not sequential `current + 1`.
+- **States**:
+  - `Idle`
+  - `Playing`
+  - `PendingAdvance` (Wait for confirmation)
+- **Flow**:
+  1. MPV sends `end-file`.
+  2. FSM checks `PlayQueue` repeat mode.
+  3. FSM determines intent (e.g., `RepeatOne` -> Seek 0, `Next` -> Load next).
+  4. FSM executes intent and waits for `TrackChanged`.
+
+### Epoch-Based Event Processing
+To handle async races (e.g., user mashes "Next" while prefetch is running):
+- `PlayQueue` maintains a `state_epoch`.
+- All `QueueEvent`s carry this epoch.
+- Bridge handlers discard events with stale epochs (`event.epoch < current_epoch`).
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `rmpc/src/player/playback_service.rs` | PlaybackService orchestrator |
-| `rmpc/src/player/extractor.rs` | CachedExtractor, ytx/yt-dlp |
-| `rmpc/src/player/mpv.rs` | MpvClient, IPC communication |
-| `rmpc/src/player/audio_cache.rs` | Rolling window cache |
-| `rmpc/src/player/mod.rs` | Module exports |
+| `rmpc/src/shared/play_queue.rs` | **Layer 1**: Pure state machine |
+| `rmpc/src/backends/youtube/bridge/` | **Layer 2**: Event handlers |
+| `rmpc/src/backends/youtube/services/audio_prefetcher.rs` | Audio downloader |
+| `rmpc/src/player/mpv.rs` | Low-level MPV IPC |
 
 ## Configuration
 
@@ -217,14 +121,12 @@ playback: (
 
 | Symptom | Likely Cause | File |
 |---------|--------------|------|
-| "No audio" | URL expired, re-extract | `extractor.rs` |
-| MPV not responding | Socket not created | Check mpv --input-ipc-server |
-| Gaps between tracks | Cache miss, slow extraction | `audio_cache.rs` |
-| Wrong track plays | Queue/cache desync | `playback_service.rs` |
-| ytx fails | Binary not found | Check PATH, fallback to yt-dlp |
+| Queue order in TUI != Audio | Bridge failed to handle `OrderChanged` | `bridge/handlers.rs` |
+| "No cookies found" | Auth issue affecting `ytx` | `~/.config/rmpc/cookie.txt` |
+| Gaps between tracks | Prefetcher lag or cache miss | `audio_prefetcher.rs` |
+| Single mode skips track | PendingAdvance FSM logic error | `bridge/fsm.rs` |
 
 ## See Also
 
+- [docs/arch/play-queue.md](play-queue.md) - Detailed queue architecture
 - [docs/features/playback.md](../features/playback.md) - End-to-end playback flow
-- [docs/features/queue.md](../features/queue.md) - Queue management
-- [docs/arch/youtube-integration.md](youtube-integration.md) - Video ID source

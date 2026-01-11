@@ -19,6 +19,7 @@
 | [arch/section-model.md](arch/section-model.md) | SectionList, UI vs domain separation |
 | [arch/persistence.md](arch/persistence.md) | Config, serialization, state storage |
 | [arch/background-tasks.md](arch/background-tasks.md) | Scheduler, prefetch, threading |
+| [arch/play-queue.md](arch/play-queue.md) | **NEW**: PlayQueue state machine (L1) & Bridge (L2) |
 
 ### Zone 2: Capabilities (Backend Contracts)
 | File | Content |
@@ -64,6 +65,7 @@
 | Implement new backend | [backends/reference/](backends/reference/README.md), [capabilities/](capabilities/README.md) |
 | Fix search/TopResult | [features/search.md](features/search.md), [arch/youtube-integration.md](arch/youtube-integration.md) |
 | Fix playback | [features/playback.md](features/playback.md), [arch/playback-engine.md](arch/playback-engine.md) |
+| Fix queue sync | [features/queue.md](features/queue.md), [arch/play-queue.md](arch/play-queue.md) |
 | Fix navigation | [arch/ui-navigation.md](arch/ui-navigation.md) |
 | Add new content type | [arch/youtube-integration.md](arch/youtube-integration.md) |
 | Understand actions | [arch/action-system.md](arch/action-system.md) |
@@ -90,4 +92,4 @@ yrmpc/
 └── ytmapi-yrmpc/           # YouTube API client (submodule)
 ```
 
-Last updated: 2025-01-08
+Last updated: 2025-01-11
