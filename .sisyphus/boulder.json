@@ -1,8 +1,7 @@
 {
-  "active_plan": "/home/phucdnt/workspace/projects/yrmpc/.sisyphus/plans/unified-streaming-audio-file.md",
-  "started_at": "2026-01-11T18:24:08.237Z",
-  "completed_at": "2026-01-12T10:30:00.000Z",
-  "session_ids": ["ses_456ebfd5fffeUZ7E5Adkb0IHI6"],
-  "plan_name": "unified-streaming-audio-file",
-  "status": "complete"
+  "active_plan": "/home/phucdnt/workspace/projects/yrmpc/.sisyphus/plans/unified-streaming-improvements.md",
+  "started_at": "2026-01-12T10:52:03.184Z",
+  "session_ids": ["ses_44e2a6b5bffej4Dsb2aV4XuGoM"],
+  "plan_name": "unified-streaming-improvements",
+  "status": "in_progress"
 }

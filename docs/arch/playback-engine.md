@@ -52,18 +52,21 @@ The playback engine follows a **Two-Layer Architecture** (see [PlayQueue Archite
 │  3. Cache result with TTL (~4 hours, YouTube URL expiry)                │
 │                                                                         │
 │  4. Return URL                                                          │
-│     └─► Hybrid EDL: edl://cache,0,10;stream,10,                         │
-│         (Plays from local cache if available, then streams)             │
+│     └─► Progressive file path (ProgressiveAudioFile)                    │
+│         MPV reads directly from local progressive download file         │
+│         See: [audio-streaming.md](audio-streaming.md) for details       │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Audio Prefetcher (Rate-Limited)
-- **Goal**: Minimize latency and prevent buffering.
+### Audio Prefetcher & ProgressiveAudioFile
+- **Goal**: Minimize latency and prevent buffering via progressive download.
 - **Trigger**: `ItemsAdded` event or `ItemsRemoved` (cancellation).
 - **Strategy**:
-  - Sequential downloads (token bucket: 1 req/sec).
-  - Priority based on distance from current track.
-  - Stores audio chunks in `~/.cache/rmpc/audio/`.
+  - `AudioFileManager` coordinates file lifecycle with LRU eviction.
+  - `ProgressiveAudioFile` handles concurrent read/write with blocking semantics.
+  - Priority-based prefetch: Current (full), Next (full), Next+2/3 (30s partial).
+  - Stores progressive files in `~/.cache/rmpc/streaming/`.
+  - See: [audio-streaming.md](audio-streaming.md) for architecture details.
 
 ### MPV Controller & Sync
 The Bridge maintains "What you see is what you hear" via atomic playlist management.
@@ -129,4 +132,5 @@ playback: (
 ## See Also
 
 - [docs/arch/play-queue.md](play-queue.md) - Detailed queue architecture
+- [docs/arch/audio-streaming.md](audio-streaming.md) - Progressive streaming architecture (ADR-001)
 - [docs/features/playback.md](../features/playback.md) - End-to-end playback flow
