@@ -43,6 +43,8 @@ The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` libra
 | Playback Service | `backends/youtube/services/playback_service.rs` | MPV control |
 | Queue Service | `backends/youtube/services/queue_service.rs` | Queue state |
 | Internal Events | `backends/youtube/services/internal_event.rs` | Typed MPV event routing |
+| ProgressiveAudioFile | `backends/youtube/streaming_audio_file.rs` | Progressive download with range requests |
+| AudioFileManager | `backends/youtube/audio_file_manager.rs` | File lifecycle and cache management |
 
 ## Resilience Architecture (2024-01)
 
@@ -96,7 +98,9 @@ See [auth.md](./auth.md) for details on:
 
 ## Stream Resolution
 
-Extractor options (ytx vs yt-dlp), URL caching, and prefetch strategy are handled by the URL Resolver component.
+Extractor options (ytx vs yt-dlp), URL caching, and prefetch strategy are handled by the URL Resolver component. Audio streaming uses `ProgressiveAudioFile` for progressive download with `AudioFileManager` coordinating file lifecycle and cache eviction.
+
+See [arch/audio-streaming.md](../../arch/audio-streaming.md) for detailed streaming architecture.
 
 ## YouTube-Specific Quirks
 

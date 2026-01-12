@@ -75,6 +75,7 @@ Content is organized into typed sections for flexible rendering:
 |------|------------|
 | Fix search/TopResult parsing | [features/search.md](features/search.md), [arch/youtube-integration.md](arch/youtube-integration.md) |
 | Fix playback/MPV issues | [features/playback.md](features/playback.md), [arch/playback-engine.md](arch/playback-engine.md) |
+| Fix streaming/buffering | [arch/audio-streaming.md](arch/audio-streaming.md) |
 | Fix navigation/back button | [arch/ui-navigation.md](arch/ui-navigation.md) |
 | Add new pane | [features/navigation.md](features/navigation.md) |
 | Fix queue operations | [features/queue.md](features/queue.md) |
@@ -99,6 +100,7 @@ Content is organized into typed sections for flexible rendering:
 | Library empty/stale | Cache or backend | [capabilities/library-cache.md](capabilities/library-cache.md), [features/library.md](features/library.md) |
 | Config not loading | Persistence | [arch/persistence.md](arch/persistence.md) |
 | Prefetch not working | Background tasks | [arch/background-tasks.md](arch/background-tasks.md) |
+| Audio cuts out mid-track | Streaming issue | [arch/audio-streaming.md](arch/audio-streaming.md) |
 
 ## Documentation Index
 
@@ -108,6 +110,7 @@ Content is organized into typed sections for flexible rendering:
 - [arch/section-model.md](arch/section-model.md) - SectionList, UI vs domain
 - [arch/persistence.md](arch/persistence.md) - Config, serialization, state storage
 - [arch/background-tasks.md](arch/background-tasks.md) - Scheduler, prefetch, threading
+- [arch/audio-streaming.md](arch/audio-streaming.md) - Progressive streaming, caching (ADR-001)
 
 ### Zone 2: Capabilities (Backend Contracts)
 - [capabilities/README.md](capabilities/README.md) - **Start here** - Required vs optional capabilities
