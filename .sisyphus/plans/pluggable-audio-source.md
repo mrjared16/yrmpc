@@ -134,9 +134,9 @@ Remove dead code and finalize.
   - `.sisyphus/drafts/oracle.md` - Oracle consultation notes
   
   **Acceptance Criteria**:
-  - [ ] Concat+subfile documented as current approach
-  - [ ] ProgressiveAudioFile marked as dormant/future
-  - [ ] Architecture diagram included
+  - [x] Concat+subfile documented as current approach
+  - [x] ProgressiveAudioFile marked as dormant/future
+  - [x] Architecture diagram included
 
 ---
 
@@ -148,8 +148,8 @@ Remove dead code and finalize.
   - Document byte-level flow: cache prefix → subfile offset → YouTube CDN
   
   **Acceptance Criteria**:
-  - [ ] Current flow shows concat+subfile
-  - [ ] Byte-perfect junction documented
+  - [x] Current flow shows concat+subfile
+  - [x] Byte-perfect junction documented
 
 ---
 
@@ -160,8 +160,8 @@ Remove dead code and finalize.
   - Update component descriptions
   
   **Acceptance Criteria**:
-  - [ ] MpvAudioSource trait referenced
-  - [ ] No references to deleted AudioFileManager
+  - [x] MpvAudioSource trait referenced
+  - [x] No references to deleted AudioFileManager
 
 ---
 
@@ -173,8 +173,8 @@ Remove dead code and finalize.
   - Mark ProgressiveAudioFile, RangeSet as dormant (for future proxy)
   
   **Acceptance Criteria**:
-  - [ ] Component status clarified
-  - [ ] Matches actual codebase state
+  - [x] Component status clarified
+  - [x] Matches actual codebase state
 
 ---
 
@@ -195,9 +195,9 @@ Remove dead code and finalize.
   ```
   
   **Acceptance Criteria**:
-  - [ ] Directory structure exists
-  - [ ] mod.rs exports created
-  - [ ] `cargo build` passes
+  - [x] Directory structure exists
+  - [x] mod.rs exports created
+  - [x] `cargo build` passes
 
 ---
 
@@ -229,10 +229,10 @@ Remove dead code and finalize.
   ```
   
   **Acceptance Criteria**:
-  - [ ] Trait defined with 3 methods
-  - [ ] MpvInput and CacheInfo structs defined
-  - [ ] Default impls for startup/shutdown
-  - [ ] `cargo build` passes
+  - [x] Trait defined with 3 methods
+  - [x] MpvInput and CacheInfo structs defined
+  - [x] Default impls for startup/shutdown
+  - [x] `cargo build` passes
 
 ---
 
@@ -269,10 +269,10 @@ Remove dead code and finalize.
   - `url_resolver.rs:176` for Range header usage
   
   **Acceptance Criteria**:
-  - [ ] AudioCache struct with entries HashMap
-  - [ ] CacheEntry with metadata
-  - [ ] Cache dir: `~/.cache/rmpc/audio/`
-  - [ ] `cargo build` passes
+  - [x] AudioCache struct with entries HashMap
+  - [x] CacheEntry with metadata
+  - [x] Cache dir: `~/.cache/rmpc/audio/`
+  - [x] `cargo build` passes
 
 ---
 
@@ -294,10 +294,10 @@ Remove dead code and finalize.
   ```
   
   **Acceptance Criteria**:
-  - [ ] Download with Range header
-  - [ ] Save to correct path
-  - [ ] Return CacheInfo on success
-  - [ ] Unit test with mock HTTP
+  - [x] Download with Range header
+  - [x] Save to correct path
+  - [x] Return CacheInfo on success
+  - [x] Unit test with mock HTTP
 
 ---
 
@@ -310,9 +310,9 @@ Remove dead code and finalize.
   3. Update entries map
   
   **Acceptance Criteria**:
-  - [ ] Eviction respects max_size (200MB)
-  - [ ] Oldest entries deleted first
-  - [ ] Unit test for eviction
+  - [x] Eviction respects max_size (200MB)
+  - [x] Oldest entries deleted first
+  - [x] Unit test for eviction
 
 ---
 
@@ -353,10 +353,10 @@ Remove dead code and finalize.
   ```
   
   **Acceptance Criteria**:
-  - [ ] ConcatSource implements MpvAudioSource
-  - [ ] URL properly formatted
-  - [ ] Special characters escaped
-  - [ ] protocol_whitelist included in mpv_args
+  - [x] ConcatSource implements MpvAudioSource
+  - [x] URL properly formatted
+  - [x] Special characters escaped
+  - [x] protocol_whitelist included in mpv_args
 
 ---
 
@@ -370,8 +370,8 @@ Remove dead code and finalize.
   - `src/backends/youtube/mpv/ipc.rs` - MPV spawn logic
   
   **Acceptance Criteria**:
-  - [ ] protocol_whitelist passed to MPV
-  - [ ] Verified with `mpv --list-protocols`
+  - [x] protocol_whitelist passed to MPV
+  - [x] Verified with `mpv --list-protocols`
 
 ---
 
@@ -398,10 +398,10 @@ Remove dead code and finalize.
   - `src/backends/youtube/services/playback_service.rs:305` - Current build_playback_url
   
   **Acceptance Criteria**:
-  - [ ] playback_service uses MpvAudioSource
-  - [ ] Prefix cache checked/downloaded before play
-  - [ ] `cargo build` passes
-  - [ ] Manual test: play song, verify instant start
+  - [x] playback_service uses MpvAudioSource
+  - [x] Prefix cache checked/downloaded before play
+  - [x] `cargo build` passes
+  - [x] Manual test: play song, verify instant start
 
 ---
 
@@ -425,9 +425,9 @@ Remove dead code and finalize.
   ```
   
   **Acceptance Criteria**:
-  - [ ] Config option added
-  - [ ] Default is Concat
-  - [ ] Documented in config example
+  - [x] Config option added
+  - [x] Default is Concat
+  - [x] Documented in config example
 
 ---
 
@@ -439,9 +439,9 @@ Remove dead code and finalize.
   - Test end-to-end with real YouTube URL (optional, slow)
   
   **Acceptance Criteria**:
-  - [ ] Unit tests for ConcatSource
-  - [ ] Unit tests for AudioCache
-  - [ ] `cargo test` passes
+  - [x] Unit tests for ConcatSource
+  - [x] Unit tests for AudioCache
+  - [x] `cargo test` passes
 
 ---
 
@@ -455,9 +455,9 @@ Remove dead code and finalize.
   - Remove any unused imports
   
   **Acceptance Criteria**:
-  - [ ] File deleted
-  - [ ] `cargo build` passes
-  - [ ] No orphan imports
+  - [x] File deleted
+  - [x] `cargo build` passes
+  - [x] No orphan imports
 
 ---
 
@@ -469,9 +469,9 @@ Remove dead code and finalize.
   - Add doc comment: "Reserved for future ProxySource seek tracking"
   
   **Acceptance Criteria**:
-  - [ ] File moved
-  - [ ] Imports updated
-  - [ ] `cargo build` passes
+  - [x] File moved
+  - [x] Imports updated
+  - [x] `cargo build` passes
 
 ---
 
@@ -489,9 +489,9 @@ Remove dead code and finalize.
   - Keep file but don't export publicly
   
   **Acceptance Criteria**:
-  - [ ] Doc comment added
-  - [ ] Not exported from mod.rs
-  - [ ] `cargo build` passes
+  - [x] Doc comment added
+  - [x] Not exported from mod.rs
+  - [x] `cargo build` passes
 
 ---
 
@@ -503,9 +503,9 @@ Remove dead code and finalize.
   - Clean up unused exports
   
   **Acceptance Criteria**:
-  - [ ] Clean exports
-  - [ ] `cargo build` passes
-  - [ ] `cargo doc` generates clean output
+  - [x] Clean exports
+  - [x] `cargo build` passes
+  - [x] `cargo doc` generates clean output
 
 ---
 
@@ -571,12 +571,12 @@ Final verification:
 
 ## Success Criteria
 
-- [ ] Byte-perfect playback (no audible gap at junction)
-- [ ] Instant start for queued songs (prefix cached)
-- [ ] All 872+ tests still passing
-- [ ] No new clippy warnings
-- [ ] Documentation accurate and up-to-date
-- [ ] Dead code removed (AudioFileManager deleted)
+- [x] Byte-perfect playback (no audible gap at junction)
+- [x] Instant start for queued songs (prefix cached)
+- [x] All 872+ tests still passing
+- [x] No new clippy warnings
+- [x] Documentation accurate and up-to-date
+- [x] Dead code removed (AudioFileManager deleted)
 
 ---
 
