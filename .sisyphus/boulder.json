@@ -1,7 +1,6 @@
 {
-  "active_plan": "<PROJECT_ROOT>/.sisyphus/plans/unified-streaming-improvements.md",
-  "started_at": "2026-01-12T10:52:03.184Z",
+  "active_plan": "<PROJECT_ROOT>/.sisyphus/plans/pluggable-audio-source.md",
+  "started_at": "2026-01-13T08:21:21.390Z",
   "session_ids": ["ses_44e2a6b5bffej4Dsb2aV4XuGoM"],
-  "plan_name": "unified-streaming-improvements",
-  "status": "in_progress"
+  "plan_name": "pluggable-audio-source"
 }

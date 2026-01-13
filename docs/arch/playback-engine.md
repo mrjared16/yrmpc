@@ -58,15 +58,17 @@ The playback engine follows a **Two-Layer Architecture** (see [PlayQueue Archite
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Audio Prefetcher & ProgressiveAudioFile
-- **Goal**: Minimize latency and prevent buffering via progressive download.
-- **Trigger**: `ItemsAdded` event or `ItemsRemoved` (cancellation).
-- **Strategy**:
-  - `AudioFileManager` coordinates file lifecycle with LRU eviction.
-  - `ProgressiveAudioFile` handles concurrent read/write with blocking semantics.
-  - Priority-based prefetch: Current (full), Next (full), Next+2/3 (30s partial).
-  - Stores progressive files in `~/.cache/rmpc/streaming/`.
-  - See: [audio-streaming.md](audio-streaming.md) for architecture details.
+### Audio Source & Caching
+- **Goal**: Instant playback start with byte-perfect audio via cached prefixes.
+- **Architecture**: Pluggable `MpvAudioSource` trait (Strategy Pattern)
+  - `ConcatSource` (DEFAULT): Uses ffmpeg concat+subfile protocol
+  - `ProxySource` (FUTURE): HTTP server for offline mode, metrics
+- **AudioCache**: Manages prefix files (~200KB per song)
+  - Path: `~/.cache/rmpc/audio/{video_id}.m4a`
+  - Budget: <200MB with LRU eviction
+  - API: `ensure_prefix(video_id)` guarantees instant start
+- **Concat URL**: `concat:/cache/{id}.m4a|subfile,,start,{OFFSET},end,0,,:${URL}`
+- See: [audio-streaming.md](audio-streaming.md) for detailed architecture (ADR-001).
 
 ### MPV Controller & Sync
 The Bridge maintains "What you see is what you hear" via atomic playlist management.
@@ -105,7 +107,10 @@ To handle async races (e.g., user mashes "Next" while prefetch is running):
 |------|---------|
 | `rmpc/src/shared/play_queue.rs` | **Layer 1**: Pure state machine |
 | `rmpc/src/backends/youtube/bridge/` | **Layer 2**: Event handlers |
-| `rmpc/src/backends/youtube/services/audio_prefetcher.rs` | Audio downloader |
+| `rmpc/src/backends/youtube/audio/mod.rs` | Audio module exports |
+| `rmpc/src/backends/youtube/audio/cache.rs` | AudioCache (prefix files, LRU) |
+| `rmpc/src/backends/youtube/audio/mpv_source.rs` | MpvAudioSource trait |
+| `rmpc/src/backends/youtube/audio/sources/concat.rs` | ConcatSource (DEFAULT) |
 | `rmpc/src/player/mpv.rs` | Low-level MPV IPC |
 
 ## Configuration
@@ -126,7 +131,8 @@ playback: (
 |---------|--------------|------|
 | Queue order in TUI != Audio | Bridge failed to handle `OrderChanged` | `bridge/handlers.rs` |
 | "No cookies found" | Auth issue affecting `ytx` | `~/.config/rmpc/cookie.txt` |
-| Gaps between tracks | Prefetcher lag or cache miss | `audio_prefetcher.rs` |
+| Audio gap at track start | Prefix not cached | `audio/cache.rs` |
+| "protocol_whitelist" error | Missing MPV args | `audio/sources/concat.rs` |
 | Single mode skips track | PendingAdvance FSM logic error | `bridge/fsm.rs` |
 
 ## See Also
