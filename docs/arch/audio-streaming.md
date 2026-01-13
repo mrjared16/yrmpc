@@ -1,58 +1,141 @@
 # Audio Streaming Architecture
 
 ## Purpose
-Documents the progressive streaming audio system: `ProgressiveAudioFile` (currently named `StreamingAudioFile`), `AudioFileManager`, and `RangeSet`. This architecture replaces the previous EDL+cache approach with a unified progressive download model.
+Documents the pluggable audio source architecture with byte-perfect playback using ffmpeg's concat+subfile protocol. This replaces the previous EDL approach which had timing gaps.
+
+**Authoritative Reference**: [ADR-001](../adr/ADR-001-audio-streaming-architecture.md)
 
 ## When to Read
-- **Symptoms**: Audio cuts out mid-track, buffering issues, cache disk usage, download stalls
-- **Tasks**: Modify streaming behavior, tune cache parameters, debug download issues
+- **Symptoms**: Audio gaps at track start, cache issues, "protocol_whitelist" errors
+- **Tasks**: Modify audio source strategy, tune cache parameters, add new source type
 
 ## Architecture Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Audio Streaming System                             │
+│                       Audio Streaming System                                 │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ┌──────────────┐    ┌───────────────────┐    ┌──────────────────────────┐  │
-│  │ URL Resolver │───▶│ Download Task     │───▶│ StreamingAudioFile       │  │
-│  │ (ytx/yt-dlp) │    │ (HTTP range req)  │    │ - Pre-allocated file     │  │
-│  └──────────────┘    └───────────────────┘    │ - RangeSet tracking      │  │
-│                              │                 │ - Condvar signaling      │  │
-│                              │ write_at()      └───────────┬──────────────┘  │
-│                              ▼                             │                 │
-│                      ┌───────────────────┐                 │ read_at()       │
-│                      │ AudioFileManager  │                 │ (blocks if      │
-│                      │ - File lifecycle  │                 │  not available) │
-│                      │ - LRU eviction    │                 ▼                 │
-│                      │ - Prefetch window │         ┌──────────────┐         │
-│                      └───────────────────┘         │     MPV      │         │
-│                                                    │ (reads file) │         │
-│                                                    └──────────────┘         │
+│  ┌──────────────────┐    ┌───────────────────────────────────────────────┐  │
+│  │ PlaybackService  │───►│ MpvAudioSource (Trait - Strategy Pattern)     │  │
+│  └──────────────────┘    │                                               │  │
+│                          │  ┌─────────────────────────────────────────┐  │  │
+│                          │  │ ConcatSource (DEFAULT)                  │  │  │
+│                          │  │ - Uses ffmpeg concat+subfile protocol   │  │  │
+│                          │  │ - Byte-perfect playback                 │  │  │
+│                          │  │ - Stateless, ~50 lines                  │  │  │
+│                          │  └─────────────────────────────────────────┘  │  │
+│                          │                                               │  │
+│                          │  ┌─────────────────────────────────────────┐  │  │
+│                          │  │ ProxySource (FUTURE)                    │  │  │
+│                          │  │ - HTTP server for offline mode          │  │  │
+│                          │  │ - Metrics, URL refresh                  │  │  │
+│                          │  └─────────────────────────────────────────┘  │  │
+│                          └───────────────────────────────────────────────┘  │
+│                                           │                                  │
+│                                           ▼                                  │
+│                          ┌───────────────────────────────────────────────┐  │
+│                          │ AudioCache (Shared)                           │  │
+│                          │ - Prefix files (~200KB per song)              │  │
+│                          │ - Budget: <200MB for ~100 songs               │  │
+│                          │ - LRU eviction when budget exceeded           │  │
+│                          │ - Path: ~/.cache/rmpc/audio/{video_id}.m4a    │  │
+│                          └───────────────────────────────────────────────┘  │
+│                                           │                                  │
+│                                           ▼                                  │
+│                                    ┌──────────────┐                         │
+│                                    │     MPV      │                         │
+│                                    │ concat URL   │                         │
+│                                    └──────────────┘                         │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Details
 
-### StreamingAudioFile (→ ProgressiveAudioFile)
+### MpvAudioSource Trait
 
-**Location**: `rmpc/src/backends/youtube/streaming_audio_file.rs`
+**Location**: `rmpc/src/backends/youtube/audio/mpv_source.rs`
 
-A streaming audio file that supports concurrent reading and writing. Design inspired by librespot's `AudioFile`.
+The pluggable interface for audio source strategies. Uses the Strategy Pattern to allow swapping implementations.
+
+```rust
+pub struct MpvInput {
+    pub url: String,
+    pub mpv_args: Vec<String>,
+}
+
+pub trait MpvAudioSource: Send {
+    fn startup(&mut self) -> anyhow::Result<()> { Ok(()) }
+    fn shutdown(&mut self) {}
+    fn build_mpv_input(&mut self, video_id: &str) -> anyhow::Result<MpvInput>;
+}
+```
+
+**Key Points**:
+- `build_mpv_input()` returns both URL and MPV arguments
+- `startup()`/`shutdown()` for sources that need initialization (e.g., ProxySource HTTP server)
+- All implementations share the same `AudioCache`
+
+### ConcatSource (DEFAULT)
+
+**Location**: `rmpc/src/backends/youtube/audio/sources/concat.rs`
+
+Uses ffmpeg's concat+subfile protocol for byte-perfect playback. This is the default and recommended implementation.
+
+**How It Works**:
+```
+1. AudioCache::ensure_prefix(video_id) 
+   └─► Downloads first ~200KB if not cached
+
+2. Build concat URL:
+   concat:/cache/{video_id}.m4a|subfile,,start,{BYTE_OFFSET},end,0,,:${YOUTUBE_URL}
+         └── Cached prefix ──┘  └── Remainder from YouTube starting at byte offset ──┘
+
+3. Return MpvInput with protocol_whitelist args
+```
+
+**Concat URL Syntax**:
+```
+concat:<source1>|<source2>
+
+Where source2 uses subfile protocol:
+subfile,,start,<BYTE>,end,0,,:URL
+        │      └─ Start byte offset
+        └─ Empty filename (uses URL directly)
+```
+
+**Required MPV Args**:
+```
+--demuxer-lavf-o=protocol_whitelist=file,http,https,tcp,tls,crypto,subfile,concat
+```
+
+**Why concat+subfile over EDL**:
+- EDL uses TIME offsets: `edl://cache.opus,0,10;{url},10,` → 5-50ms audible gap
+- concat+subfile uses BYTE offsets → byte-perfect junction
+- Verified via PCM MD5 comparison (identical hashes)
+
+### AudioCache
+
+**Location**: `rmpc/src/backends/youtube/audio/cache.rs`
+
+Manages prefix files that enable instant playback start. Shared by all MpvAudioSource implementations.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    StreamingAudioFile                            │
+│                        AudioCache                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  Inner (Mutex-protected):                                        │
-│  ├── path: PathBuf           # File location on disk             │
-│  ├── content_length: u64     # Total expected file size          │
-│  ├── downloaded: RangeSet    # Tracks which bytes are ready      │
-│  ├── write_file: Option<File> # Write handle (None when done)   │
-│  ├── error: Option<String>   # Download error if any             │
-│  └── requested_offset: Option<u64>  # Seek target for priority  │
+│  config:                                                         │
+│  ├── cache_dir: PathBuf      # ~/.cache/rmpc/audio/              │
+│  ├── prefix_size: u64        # 204800 (200KB)                    │
+│  └── max_cache_size: u64     # 209715200 (200MB)                 │
 │                                                                  │
-│  Condvar: Arc<Condvar>       # Signals new bytes available       │
+│  entries: RwLock<HashMap<String, CacheEntry>>                    │
+│                                                                  │
+│  CacheEntry:                                                     │
+│  ├── path: PathBuf           # Full path to .m4a file            │
+│  ├── size: u64               # Actual size on disk               │
+│  ├── content_length: u64     # Total file size (for byte offset) │
+│  └── last_accessed: Instant  # For LRU eviction                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,78 +143,43 @@ A streaming audio file that supports concurrent reading and writing. Design insp
 
 | Method | Description |
 |--------|-------------|
-| `new(path, content_length)` | Pre-allocates file to `content_length` |
-| `write_at(offset, data)` | Called by downloader, notifies waiters |
-| `read_at(offset, buf)` | **Blocks** until bytes available |
-| `bytes_available_from(offset)` | Non-blocking availability check |
-| `request_range(offset)` | Signals priority download from offset |
-| `set_error(msg)` | Propagates download failure to readers |
+| `ensure_prefix(video_id)` | Returns path if cached, else downloads first ~200KB |
+| `get_content_length(video_id)` | Returns total file size for byte offset calculation |
+| `evict_lru()` | Removes oldest entries when budget exceeded |
+| `total_size()` | Sum of all cached prefix files |
 
-**Blocking Read Flow**:
+**Prefix Download Flow**:
 ```
-read_at(offset, buf)
+ensure_prefix(video_id)
     │
     ▼
 ┌─────────────────────────────────┐
-│ Lock mutex, check error         │
+│ Check if exists in cache_dir    │
 │         │                       │
 │         ▼                       │
 │ ┌─────────────────────────────┐ │
-│ │ Loop until bytes available: │ │
-│ │   contiguous_from(offset)   │ │
-│ │   if available: break       │ │
-│ │   else: condvar.wait()      │ │◀─── Blocked here
+│ │ If exists: update LRU,      │ │
+│ │            return path      │ │
 │ └─────────────────────────────┘ │
 │         │                       │
 │         ▼                       │
-│ Release lock, do file I/O       │
-│         │                       │
-│         ▼                       │
-│ Return bytes read               │
+│ ┌─────────────────────────────┐ │
+│ │ If not exists:              │ │
+│ │   1. Resolve YouTube URL    │ │
+│ │   2. HTTP Range: 0-200KB    │ │
+│ │   3. Write to cache_dir     │ │
+│ │   4. Store content_length   │ │
+│ │   5. Evict LRU if needed    │ │
+│ │   6. Return path            │ │
+│ └─────────────────────────────┘ │
 └─────────────────────────────────┘
 ```
 
-### AudioFileManager
+### RangeSet (Kept for Future Proxy)
 
-**Location**: `rmpc/src/backends/youtube/audio_file_manager.rs`
+**Location**: `rmpc/src/backends/youtube/audio/range_set.rs`
 
-Manages multiple `StreamingAudioFile` instances with lifecycle control and cache eviction.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     AudioFileManager                             │
-├─────────────────────────────────────────────────────────────────┤
-│  config:                                                         │
-│  ├── cache_dir: PathBuf      # ~/.cache/rmpc/streaming/          │
-│  └── max_size_bytes: u64     # 100 MB default                    │
-│                                                                  │
-│  files: RwLock<HashMap<String, ManagedFile>>                     │
-│                                                                  │
-│  ManagedFile:                                                    │
-│  ├── file: Arc<StreamingAudioFile>                               │
-│  ├── video_id: String                                            │
-│  ├── content_length: u64                                         │
-│  ├── last_accessed: Instant  # For LRU                           │
-│  └── priority: PrefetchPriority                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-**Prefetch Priorities**:
-
-| Priority | Description | Evictable? |
-|----------|-------------|------------|
-| `Current` | Currently playing track | No |
-| `Next` | Next track in queue | No |
-| `Partial { duration_secs: 30 }` | Next+2, Next+3 | Yes |
-| `None` | Not in prefetch window | Yes |
-
-**LRU Eviction**: When cache exceeds `max_size_bytes`, evicts least-recently-used files that aren't `Current` or `Next` priority.
-
-### RangeSet
-
-**Location**: `rmpc/src/backends/youtube/range_set.rs`
-
-Tracks downloaded byte ranges as sorted, non-overlapping `(start, end)` tuples. Adjacent ranges are automatically merged.
+Tracks downloaded byte ranges as sorted, non-overlapping `(start, end)` tuples. Currently kept for the future ProxySource implementation.
 
 ```
 Example progression:
@@ -149,111 +197,156 @@ add(50, 100): [(0, 150)]  ← Merged!
 | `add_range(start, end)` | Add range, auto-merge overlapping/adjacent |
 | `contains(offset)` | Binary search for O(log n) lookup |
 | `contiguous_from(offset)` | End of contiguous bytes from offset |
-| `total_bytes()` | Sum of all range sizes |
-| `is_complete(content_length)` | True if single range `[0, content_length)` |
-| `first_gap_after(offset, file_size)` | Find next undownloaded region |
+
+## Legacy Components (DORMANT)
+
+### ProgressiveAudioFile (DORMANT - Future ProxySource)
+
+**Location**: `rmpc/src/backends/youtube/streaming_audio_file.rs`
+
+**Status**: DORMANT. Will be refactored for ProxySource implementation.
+
+A streaming audio file supporting concurrent read/write. Originally designed for the full-file progressive download approach. When ProxySource is implemented, this will be refactored to handle the HTTP server's file serving.
+
+### AudioFileManager (TO BE DELETED)
+
+**Location**: `rmpc/src/backends/youtube/audio_file_manager.rs`
+
+**Status**: TO BE DELETED. Replaced by simpler AudioCache.
+
+The original file lifecycle manager with LRU eviction. AudioCache provides the same functionality with a simpler API focused on prefix files only.
 
 ## Data Flow
 
 ```
-┌─────────────┐     ┌─────────────┐     ┌─────────────────────────┐
-│ PlaybackSvc │────▶│ AudioFile   │────▶│ get_or_create(video_id) │
-│             │     │ Manager     │     │                         │
-└─────────────┘     └─────────────┘     └───────────┬─────────────┘
-                                                     │
-                          ┌──────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    StreamingAudioFile                            │
-│                                                                  │
-│   Download Task          │           MPV Reader                  │
-│   ─────────────          │           ──────────                  │
-│   1. HTTP GET range      │           1. Open file path           │
-│   2. Receive chunk       │           2. Seek to position         │
-│   3. write_at(off, data) │           3. read_at(offset, buf)     │
-│   4. Notify condvar ─────┼──────────▶4. Wait if not available    │
-│   5. Repeat until done   │           5. Read when ready          │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────┐     ┌──────────────────┐     ┌───────────────────────┐
+│ PlaybackSvc │────►│ MpvAudioSource   │────►│ build_mpv_input()     │
+│             │     │ (ConcatSource)   │     │                       │
+└─────────────┘     └──────────────────┘     └───────────┬───────────┘
+                                                          │
+                           ┌──────────────────────────────┘
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         AudioCache                                   │
+│                                                                      │
+│   ensure_prefix(video_id)                                            │
+│   ─────────────────────                                              │
+│   1. Check ~/.cache/rmpc/audio/{video_id}.m4a                        │
+│   2. If miss: HTTP Range request for first 200KB                     │
+│   3. Store content_length for byte offset                            │
+│   4. Return path + content_length                                    │
+└─────────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       ConcatSource                                   │
+│                                                                      │
+│   Build concat URL:                                                  │
+│   concat:{cache_path}|subfile,,start,{prefix_size},end,0,,:${URL}   │
+│          └─ Cached prefix ─┘  └─ Stream remainder from YouTube ─┘   │
+│                                                                      │
+│   Return MpvInput:                                                   │
+│   - url: concat:...                                                  │
+│   - args: [--demuxer-lavf-o=protocol_whitelist=...]                  │
+└─────────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+                    ┌──────────────┐
+                    │     MPV      │
+                    │              │
+                    │ Plays cached │
+                    │ prefix then  │
+                    │ streams rest │
+                    └──────────────┘
 ```
 
 ## Key Design Decisions
 
-### ADR-001: Unified Progressive File over EDL
+### ADR-001: concat+subfile over EDL
 
-**Decision**: Use a single progressive file instead of EDL syntax combining cache + stream URLs.
+**Decision**: Use ffmpeg concat+subfile protocol instead of EDL syntax.
+
+**Problem with EDL**:
+```
+edl://cache.opus,0,10;{youtube_url},10,
+                 ↑              ↑
+            TIME offset    TIME offset
+```
+- TIME-based offsets don't match encoded audio boundaries
+- Results in 5-50ms audible gap at junction
+
+**Solution with concat+subfile**:
+```
+concat:/cache/{id}.m4a|subfile,,start,200000,end,0,,:${URL}
+                              ↑
+                         BYTE offset
+```
+- BYTE-based offset = byte-perfect junction
+- PCM MD5 verified identical to original file
+
+### Prefix Size: 200KB
+
+**Decision**: Cache first 200KB of each song.
 
 **Rationale**:
-- EDL required MPV to manage two sources, causing seek complexity
-- Progressive file gives full control over buffering behavior
-- Simpler error handling (one source, one error path)
-- Better seek support via `request_range()` priority mechanism
+- 200KB ≈ 1-2 seconds of M4A audio at 128kbps
+- Enough to start playback instantly
+- 100 songs = ~20MB (well under 200MB budget)
+- Trade-off: Larger prefix = more instant playback but higher storage
 
-### Pre-allocation Strategy
+### Budget: 200MB with LRU Eviction
 
-**Decision**: Pre-allocate file to `content_length` at creation.
-
-**Rationale**:
-- Allows random-access writes without sparse file handling
-- Provides atomic `is_complete()` check (single range `[0, len)`)
-- Avoids filesystem fragmentation
-
-### Condvar-based Blocking
-
-**Decision**: `read_at()` blocks via `Condvar::wait()` until bytes available.
+**Decision**: Maximum 200MB for prefix cache with LRU eviction.
 
 **Rationale**:
-- Simpler than polling or async notification
-- Natural backpressure when download is slower than playback
-- MPV's read pattern is synchronous, matches well
-
-### Mutex Pattern (CRITICAL Issue - To Be Fixed)
-
-**Current**: Mutex held during disk I/O in `read_at()`.
-
-**Problem**: Reader/writer contention, potential jitter.
-
-**Fix (yrmpc-8f9)**: Clone needed data, release lock, then do I/O.
-
-### Read Handle (CRITICAL Issue - To Be Fixed)
-
-**Current**: `read_at()` opens new `File` handle every call.
-
-**Problem**: Syscall overhead, file descriptor churn.
-
-**Fix (yrmpc-jma)**: Add persistent `read_file` handle, use `FileExt::read_at` (pread).
+- 200MB holds ~1000 song prefixes
+- LRU ensures recently played songs stay cached
+- Reasonable disk footprint for music player
 
 ## Configuration
 
 ```ron
-// Configured via AudioFileManagerConfig
-streaming: (
-    cache_dir: "~/.cache/rmpc/streaming/",
-    max_size_bytes: 104857600,  // 100 MB
-)
+// config/rmpc.ron
+audio: (
+    cache_dir: "~/.cache/rmpc/audio/",
+    prefix_size: 204800,       // 200KB
+    max_cache_size: 209715200, // 200MB
+),
 ```
 
 ## Debugging Checklist
 
 | Symptom | Likely Cause | Check |
 |---------|--------------|-------|
-| Audio stalls mid-track | Download slower than playback | Check network, `bytes_available_from()` |
-| "Download failed" error | Network issue or URL expired | Check `has_error()`, URL resolver logs |
-| High disk I/O | Frequent seeks or no caching | Check prefetch window, LRU eviction |
-| Cache filling disk | Eviction not triggering | Check `max_size_bytes`, priority settings |
-| Seek takes long time | Waiting for range download | Check `request_range()` being called |
-| Memory growth | Too many files open | Check `file_count()`, eviction |
+| Audio gap at track start | Prefix not cached | Check AudioCache, network |
+| "protocol_whitelist" error | Missing MPV args | Verify MpvInput.mpv_args passed |
+| "concat: No such file" | Cache path wrong | Check cache_dir config |
+| Byte offset wrong | content_length mismatch | Check stored vs actual size |
+| Cache filling disk | LRU not triggering | Check max_cache_size, eviction |
+| Slow first play | Prefix download slow | Check network, URL resolver |
 
-## Key Files
+## Code Structure
 
-| File | Purpose |
-|------|---------|
-| `streaming_audio_file.rs` | Core streaming file implementation |
-| `audio_file_manager.rs` | File lifecycle and cache management |
-| `range_set.rs` | Byte range tracking |
-| `services/playback_service.rs` | Uses manager for playback |
+```
+rmpc/src/backends/youtube/audio/
+├── mod.rs                  # Module exports
+├── cache.rs                # AudioCache
+├── mpv_source.rs           # MpvAudioSource trait + MpvInput
+├── sources/
+│   ├── mod.rs
+│   ├── concat.rs           # ConcatSource (DEFAULT)
+│   └── proxy/              # ProxySource (FUTURE)
+│       ├── mod.rs
+│       └── server.rs
+└── range_set.rs            # Byte range tracking (for future proxy)
+
+# Legacy (to be removed/refactored)
+rmpc/src/backends/youtube/streaming_audio_file.rs   # DORMANT
+rmpc/src/backends/youtube/audio_file_manager.rs     # TO BE DELETED
+```
 
 ## See Also
 
+- [ADR-001](../adr/ADR-001-audio-streaming-architecture.md) - Authoritative architecture decision
 - [playback-engine.md](playback-engine.md) - Overall playback architecture
-- [YouTube backend README](../backends/youtube/README.md) - Backend overview
-- [play-queue.md](play-queue.md) - Queue state management
+- [playback-flow.md](playback-flow.md) - End-to-end playback flow
