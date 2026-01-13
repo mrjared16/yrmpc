@@ -19,6 +19,83 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 
 ---
 
+## CRITICAL: Cargo Commands
+
+**ALWAYS run cargo from `rmpc/` directory, NOT from `yrmpc/` root.**
+
+```bash
+# CORRECT
+cd rmpc && cargo build
+cd rmpc && cargo test
+cd rmpc && cargo clippy
+
+# WRONG - will fail (no Cargo.toml at root)
+cargo build  # from yrmpc/
+```
+
+There is NO `Cargo.toml` at the workspace root. The main crate is in `rmpc/`.
+
+---
+
+## CRITICAL: Integration Wiring Checklist
+
+**Before marking any feature "complete", verify ALL integration points:**
+
+### The "Incomplete Wiring" Anti-Pattern
+
+A common bug pattern: implementing components that compile and pass unit tests, but are **never actually called** at runtime.
+
+**Symptoms:**
+- Feature works in tests but not in production
+- Code exists but has no observable effect
+- Stub methods (always return false/None) never replaced with real logic
+
+### Mandatory Verification Steps
+
+1. **Trace the call path**: From user action → UI → backend → new code
+2. **Check for stub implementations**: Search for `false`, `None`, `todo!()`, `unimplemented!()`
+3. **Verify runtime activation**: Add a log line, rebuild, test manually, check logs
+4. **Check config wiring**: Is the new feature enabled by default? Passed to constructors?
+
+### Example: Audio Cache Bug (2026-01)
+
+**What happened:**
+- `FfmpegConcatSource` implemented with `ensure_prefix()` for downloading
+- `build_mpv_input()` checked if cache exists but **never called download**
+- `has_cached_audio()` was a stub returning `false` always
+- Result: Cache feature "worked" in tests but never created files
+
+**How to prevent:**
+```rust
+// RED FLAG: Stub that always returns false/None
+pub fn has_cached_audio(&self, _video_id: &str) -> bool {
+    false  // ← This should delegate to actual cache check
+}
+
+// RED FLAG: Async method exists but sync caller never uses it
+impl Cache {
+    async fn ensure_prefix(...) { ... }  // ← Never called!
+}
+fn build_mpv_input(...) {
+    if path.exists() { ... }  // ← But nothing downloads it first!
+}
+```
+
+### Integration Test Pattern
+
+For features with multiple components, write an integration test:
+
+```rust
+#[test]
+fn test_audio_cache_integration() {
+    // 1. Create real instances (not mocks)
+    // 2. Call the entry point users would trigger
+    // 3. Verify the expected side effect (file exists, log appears, etc.)
+}
+```
+
+---
+
 ## Repo Layout
 
 ```
