@@ -4,7 +4,7 @@
 
 **Plan ID**: pluggable-audio-source
 **Created**: 2025-01-13
-**Status**: Ready for Execution
+**Status**: COMPLETE
 **Total Tasks**: 18
 **Estimated Duration**: 12-16 hours
 
@@ -121,7 +121,7 @@ Remove dead code and finalize.
 
 ### BATCH 0: Documentation
 
-- [ ] **doc-1: Update audio-streaming.md**
+- [x] **doc-1: Update audio-streaming.md**
   
   **What to do**:
   - Mark ProgressiveAudioFile as OPTIONAL/FUTURE proxy infrastructure
@@ -140,7 +140,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **doc-2: Update playback-flow.md**
+- [x] **doc-2: Update playback-flow.md**
   
   **What to do**:
   - Update "Current State" to show concat+subfile flow
@@ -153,7 +153,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **doc-3: Update playback-engine.md**
+- [x] **doc-3: Update playback-engine.md**
   
   **What to do**:
   - Reference MpvAudioSource trait
@@ -165,7 +165,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **doc-4: Update youtube README**
+- [x] **doc-4: Update youtube README**
   
   **What to do**:
   - Clarify which components are active vs dormant
@@ -180,7 +180,7 @@ Remove dead code and finalize.
 
 ### BATCH 1: Foundation
 
-- [ ] **found-1: Create audio module structure**
+- [x] **found-1: Create audio module structure**
   
   **What to do**:
   Create directory structure:
@@ -201,7 +201,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **found-2: Define MpvAudioSource trait**
+- [x] **found-2: Define MpvAudioSource trait**
   
   **What to do**:
   ```rust
@@ -236,7 +236,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **found-3: Implement AudioCache**
+- [x] **found-3: Implement AudioCache**
   
   **What to do**:
   ```rust
@@ -276,7 +276,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **found-4: Add prefix download logic**
+- [x] **found-4: Add prefix download logic**
   
   **What to do**:
   Implement `ensure_prefix()`:
@@ -301,7 +301,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **found-5: Add LRU eviction**
+- [x] **found-5: Add LRU eviction**
   
   **What to do**:
   Implement `evict_lru()`:
@@ -318,7 +318,7 @@ Remove dead code and finalize.
 
 ### BATCH 2: Integration
 
-- [ ] **int-1: Implement ConcatSource**
+- [x] **int-1: Implement ConcatSource**
   
   **What to do**:
   ```rust
@@ -360,7 +360,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **int-2: Add protocol_whitelist config**
+- [x] **int-2: Add protocol_whitelist config**
   
   **What to do**:
   - Ensure MPV receives `--demuxer-lavf-o=protocol_whitelist=...` at startup
@@ -375,7 +375,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **int-3: Wire into playback_service**
+- [x] **int-3: Wire into playback_service**
   
   **What to do**:
   Replace `build_playback_url()` with `MpvAudioSource::build_mpv_input()`:
@@ -405,7 +405,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **int-4: Add source selection config**
+- [x] **int-4: Add source selection config**
   
   **What to do**:
   ```rust
@@ -431,7 +431,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **int-5: Integration tests**
+- [x] **int-5: Integration tests**
   
   **What to do**:
   - Test ConcatSource URL generation
@@ -447,7 +447,7 @@ Remove dead code and finalize.
 
 ### BATCH 3: Cleanup
 
-- [ ] **clean-1: Delete AudioFileManager**
+- [x] **clean-1: Delete AudioFileManager**
   
   **What to do**:
   - Delete `src/backends/youtube/audio_file_manager.rs`
@@ -461,7 +461,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **clean-2: Move RangeSet to audio/**
+- [x] **clean-2: Move RangeSet to audio/**
   
   **What to do**:
   - Move `src/backends/youtube/range_set.rs` to `src/backends/youtube/audio/range_set.rs`
@@ -475,7 +475,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **clean-3: Mark ProgressiveAudioFile dormant**
+- [x] **clean-3: Mark ProgressiveAudioFile dormant**
   
   **What to do**:
   - Add module-level doc comment:
@@ -495,7 +495,7 @@ Remove dead code and finalize.
 
 ---
 
-- [ ] **clean-4: Update mod.rs exports**
+- [x] **clean-4: Update mod.rs exports**
   
   **What to do**:
   - Export new audio module
