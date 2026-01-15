@@ -114,6 +114,29 @@ subfile,,start,<BYTE>,end,0,,:URL
 - concat+subfile uses BYTE offsets → byte-perfect junction
 - Verified via PCM MD5 comparison (identical hashes)
 
+### Passthrough vs Concat Decision
+
+The Preparer chooses between:
+
+1. **Concat URL** (preferred): 
+   - Uses pre-downloaded audio prefix
+   - Zero startup latency for MPV
+   - Required for gapless transitions
+
+2. **Passthrough URL**:
+   - Direct stream URL, no prefix
+   - Used when prefix not ready within deadline
+   - Ensures Immediate tier plays within 200ms target
+
+Decision tree:
+```
+if tier == Immediate && prefix_not_ready_in_200ms:
+    return Passthrough
+else:
+    wait_for_prefix()
+    return Concat
+```
+
 ### AudioCache
 
 **Location**: `rmpc/src/backends/youtube/audio/cache.rs`

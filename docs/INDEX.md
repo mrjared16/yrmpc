@@ -51,12 +51,14 @@
 | [arch/playback-engine.md](arch/playback-engine.md) | MPV, audio cache, URL extraction |
 
 ### Reference
-| File | Content |
-|------|---------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture overview |
-| [VISION.md](VISION.md) | Project goals and roadmap |
-| [USER_GUIDE.md](USER_GUIDE.md) | End-user documentation |
-| [YOUTUBE_API.md](YOUTUBE_API.md) | YouTube Music API reference |
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture overview
+- [VISION.md](VISION.md) - Project goals and roadmap
+- [USER_GUIDE.md](USER_GUIDE.md) - End-user documentation
+- [YOUTUBE_API.md](YOUTUBE_API.md) - YouTube Music API reference
+
+### Architecture Decision Records
+- [ADR-001: Audio Streaming Architecture](adr/ADR-001-audio-streaming-architecture.md)
+- [ADR-002: PlayIntent Architecture](adr/ADR-002-playintent-architecture-2026-01-15.md)
 
 ## By Task
 

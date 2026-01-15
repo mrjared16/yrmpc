@@ -37,6 +37,7 @@ The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` libra
 |-----------|----------|---------|
 | Client | `backends/youtube/client.rs` | IPC with daemon |
 | Server | `backends/youtube/server/` | Request handlers |
+| Play Intent Handler | `backends/youtube/server/handlers/play_intent.rs` | Handles PlayIntent commands (ADR-002) |
 | Orchestrator | `backends/youtube/server/orchestrator.rs` | EOF/track-change state machine |
 | Adapter | `backends/youtube/adapter.rs` | Type conversions |
 | URL Resolver | `backends/youtube/url_resolver.rs` | Video ID → stream URL |

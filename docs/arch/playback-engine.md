@@ -35,28 +35,26 @@ The playback engine follows a **Two-Layer Architecture** (see [PlayQueue Archite
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Component Details
+## PreloadScheduler (replaces AudioPrefetcher)
 
-### URL Resolver & CachedExtractor
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  extract(video_id) → Result<StreamUrl>                                  │
-│                                                                         │
-│  1. Check cache: HashMap<VideoId, (URL, Expiry)>                        │
-│     └─► If valid (not expired): return cached URL                       │
-│                                                                         │
-│  2. Extract fresh URL:                                                  │
-│     └─► Primary: ytx (Rust, ~200ms)                                     │
-│     └─► Fallback: yt-dlp (Python, ~2-3s)                                │
-│                                                                         │
-│  3. Cache result with TTL (~4 hours, YouTube URL expiry)                │
-│                                                                         │
-│  4. Return URL                                                          │
-│     └─► Progressive file path (ProgressiveAudioFile)                    │
-│         MPV reads directly from local progressive download file         │
-│         See: [audio-streaming.md](audio-streaming.md) for details       │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+Priority-based preload scheduling for streaming audio:
+
+### Priority Lanes
+| Lane | Concurrency | Use Case |
+|------|-------------|----------|
+| Immediate | ∞ | Currently playing track |
+| Gapless | 2 | Next track for seamless transition |
+| Eager | 1 | Upcoming tracks in queue |
+| Background | 1 | Speculative preloading |
+
+### Preparer Pipeline
+1. **StreamUrl**: Resolve playback URL (cached extractor)
+2. **AudioPrefix**: Download first ~200KB (HTTP Range request)
+3. **MpvInput**: Build Concat (with prefix) or Passthrough URL
+
+### Tier-Based Wait Policy
+- Immediate: Wait up to 200ms, then passthrough if prefix not ready
+- Gapless/Eager/Background: Wait for full prefix completion
 
 ### Audio Source & Caching
 - **Goal**: Instant playback start with byte-perfect audio via cached prefixes.

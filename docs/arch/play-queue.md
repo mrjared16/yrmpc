@@ -84,7 +84,15 @@ enum QueueEvent {
     CurrentChanged { old: Option<Id>, new: Option<Id> },
     ModeChanged { shuffle: bool, repeat: RepeatMode },
 }
-```
+
+## PlayIntent Queue Mutations
+
+| Intent | Queue Mutation |
+|--------|----------------|
+| Context | Replace queue, set position to offset |
+| Next | Insert after current position |
+| Append | Add to end of queue |
+| Radio | Replace queue with seed song |
 
 ## Layer 2: YouTubePlayback Bridge (The Effect Runner)
 

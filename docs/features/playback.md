@@ -66,6 +66,15 @@ Documents the complete playback flow from song selection to audio output via MPV
 7. MPV streams audio, reports position/duration via IPC
 ```
 
+## Playback Intents
+
+The user can initiate playback in different ways via `PlayIntent`:
+
+- **Play (Context)**: Replaces the queue with a new list of tracks (Album, Playlist, Search Results). Optimizes for immediate playback of the selected track.
+- **Play Next**: Inserts tracks after the current song. Priority is given to the first track for gapless transition.
+- **Add to Queue**: Appends tracks to the end of the queue. Handled in background priority.
+- **Radio**: Starts a radio station from a seed track. Replaces queue with seed and lazy-fetches related tracks.
+
 ## Key Components
 
 ### CachedExtractor

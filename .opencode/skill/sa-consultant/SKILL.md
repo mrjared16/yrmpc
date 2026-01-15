@@ -1,7 +1,7 @@
 ---
-name: streaming-architecture-review
+name: sa-consultant 
 description: Expert architectural review for streaming music applications. Analyzes cross-cutting concerns, SOLID principles, design patterns, and streaming-specific issues (queue management, playback state, caching, real-time sync). Uses ASCII diagrams and feature scenarios. Use when reviewing architecture, identifying SOLID violations, evaluating design patterns, refactoring proposals, or analyzing music-app-specific concerns.
-compatibility: streaming-music-apps
+compatibility: yrmpc, rmpc 
 ---
 
 # Streaming Music Architecture Expert

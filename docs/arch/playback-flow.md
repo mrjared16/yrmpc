@@ -4,7 +4,7 @@
 
 Documents the complete flow when a user plays a song for the first time, including URL resolution, AudioCache prefix handling, and the concat+subfile streaming architecture.
 
-**Authoritative Reference**: [ADR-001](../adr/ADR-001-audio-streaming-architecture.md)
+**Authoritative Reference**: [ADR-002](../adr/ADR-002-playintent-architecture-2026-01-15.md) (Rev 2 - Unified CacheExecutor)
 
 ## When to Read
 
@@ -13,7 +13,7 @@ Documents the complete flow when a user plays a song for the first time, includi
 
 ---
 
-## High-Level Flow Diagram
+## High-Level Flow Diagram (Unified CacheExecutor)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -24,24 +24,26 @@ Documents the complete flow when a user plays a song for the first time, includi
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │  1. UI LAYER                                                                │
 │     SearchPaneV2 / Navigator / QueuePane                                    │
-│     └─► play_song() or add_and_play()                                       │
-│         └─► queue_store.replace_and_play(songs)                             │
+│     └─► play(PlayIntent::Context { tracks, offset, shuffle })               │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  2. QUEUE SERVICE                                                           │
-│     rmpc/src/backends/youtube/services/queue_service.rs                     │
-│     └─► Sends AddSong command to YouTube server                             │
-│     └─► Sends PlayPos(0) to start playback                                  │
+│  2. DAEMON: handle_play_intent()                                            │
+│     rmpc/src/backends/youtube/server/handlers/play_intent.rs                │
+│     └─► Mutate queue (instant)                                              │
+│     └─► Submit preload hints (fire-and-forget)                              │
+│     └─► Send Prepare(track[0], Immediate, deadline=200ms)                   │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  3. PLAYBACK SERVICE (handle_add_song)                                      │
-│     rmpc/src/backends/youtube/services/playback_service.rs                  │
-│     └─► MpvAudioSource::build_mpv_input(video_id)                           │
-│         └─► ConcatSource (default implementation)                           │
+│  3. CACHE EXECUTOR (UNIFIED)                                                │
+│     rmpc/src/backends/youtube/services/cache_executor.rs                    │
+│     └─► Check in_flight map (coalesce if duplicate)                         │
+│     └─► Stage 1: Resolve URL via UrlResolver                                │
+│     └─► Stage 2: Check prefix cache                                         │
+│     └─► Stage 3: Apply tier logic (deadline for Immediate)                  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                           ┌─────────┴─────────┐
@@ -52,46 +54,116 @@ Documents the complete flow when a user plays a song for the first time, includi
                     └────┬─────┘        └────┬─────┘
                          │                   │
                          │                   ▼
-                         │         ┌─────────────────────┐
-                         │         │  4. AUDIO CACHE     │
-                         │         │  audio/cache.rs     │
-                         │         ├─────────────────────┤
-                         │         │ 1. Resolve URL      │
-                         │         │    (UrlResolver)    │
-                         │         │ 2. HTTP Range: 0-   │
-                         │         │    200KB            │
-                         │         │ 3. Store prefix +   │
-                         │         │    content_length   │
-                         │         │ 4. LRU evict if     │
-                         │         │    needed           │
-                         │         └─────────┬───────────┘
-                         │                   │
-                         └───────────────────┘
+                         │         ┌─────────────────────────────────┐
+                         │         │  DEADLINE LOGIC (Immediate)     │
+                         │         ├─────────────────────────────────┤
+                         │         │ timeout(200ms, download_prefix) │
+                         │         │                                 │
+                         │         │ ├─► Success: Concat             │
+                         │         │ └─► Timeout: Passthrough        │
+                         │         │     (continue download bg)      │
+                         │         └─────────────┬───────────────────┘
+                         │                       │
+                         └───────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  5. CONCAT SOURCE (build concat URL)                                        │
-│     rmpc/src/backends/youtube/audio/sources/concat.rs                       │
-│     └─► concat:/cache/{id}.m4a|subfile,,start,{OFFSET},end,0,,:${URL}       │
-│         └── Cached prefix ──┘  └── Stream remainder from YouTube ──┘        │
+│  4. PREPARE RESULT                                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Concat { prefix_path, stream_url, content_length }                         │
+│    └─► Best case: gapless, seekable                                         │
+│                                                                             │
+│  Passthrough { stream_url }                                                 │
+│    └─► Fallback: instant audio, no seek until prefix ready                  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  6. MPV INTEGRATION                                                         │
+│  5. MPV INTEGRATION                                                         │
 │     rmpc/src/backends/youtube/mpv/                                          │
-│     └─► loadfile(concat_url) via IPC socket                                 │
-│     └─► MPV args: --demuxer-lavf-o=protocol_whitelist=...                   │
+│                                                                             │
+│     Concat mode:                                                            │
+│     └─► loadfile(concat:{prefix}|subfile,,...,:{url})                       │
 │     └─► MPV plays: cached prefix instantly, streams rest from YouTube       │
+│                                                                             │
+│     Passthrough mode:                                                       │
+│     └─► loadfile({url})                                                     │
+│     └─► MPV streams directly from YouTube (no seek until cached)            │
 └─────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│  7. AUDIO OUTPUT                                                            │
+│  6. AUDIO OUTPUT                                                            │
 │     MPV → Audio device                                                      │
 │     └─► Byte-perfect playback (no gap between prefix and stream)            │
-│     └─► Prefix ensures instant start                                        │
+│     └─► Target: <500ms from click to audio                                  │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+## Intent-Based Playback Flow (Unified CacheExecutor)
+
+```
+User Action: "Play Album" (50 songs)
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TUI: QueueStore.play(PlayIntent::Context { tracks, offset=0, shuffle })    │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │ Optimistic update
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  IPC: PlayWithIntent { intent, request_id }                                 │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Daemon: handle_play_intent()                                               │
+│                                                                             │
+│  1. Cancel previous request_id                                              │
+│  2. queue.replace(tracks)   ─────────────────────── INSTANT (no network)    │
+│  3. Submit preload hints:                                                   │
+│     ├─► track[0]: Immediate (user waiting)                                  │
+│     ├─► track[1]: Gapless (next track)                                      │
+│     └─► track[2..]: Background (opportunistic)                              │
+│                                                                             │
+│  4. Prepare(track[0], Immediate, deadline=200ms)                            │
+│                                                                             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CacheExecutor (UNIFIED)                                                    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────┐        │
+│  │ in_flight: { "track[0]": InFlightJob }                          │        │
+│  │                                                                 │        │
+│  │ Stage 1: url_resolver.extract_one(track[0])  ~200ms             │        │
+│  │ Stage 2: audio_cache.has_prefix(track[0])?   ~0ms               │        │
+│  │ Stage 3: timeout(200ms, download_prefix())                      │        │
+│  │          ├─► Ready in time: Concat                              │        │
+│  │          └─► Timeout: Passthrough + continue bg download        │        │
+│  └─────────────────────────────────────────────────────────────────┘        │
+│                                                                             │
+│  Meanwhile (parallel):                                                      │
+│  ├─► Background processes track[1] (Gapless) - no deadline                  │
+│  └─► Background queues track[2..50] (Background)                            │
+│                                                                             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MPV: loadfile(...)                                                         │
+│                                                                             │
+│  Concat mode:   concat:{prefix}|subfile,,start,{offset},...,:{url}          │
+│  Passthrough:   {url}                                                       │
+│                                                                             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+                         ┌─────────────────┐
+                         │  AUDIO PLAYS    │
+                         │  Target: <500ms │
+                         └─────────────────┘
 ```
 
 ---
@@ -160,33 +232,53 @@ Documents the complete flow when a user plays a song for the first time, includi
 
 ---
 
-## Component Responsibilities
+## Component Responsibilities (Updated for Unified CacheExecutor)
 
 | Component | File | Responsibility |
 |-----------|------|----------------|
-| **SearchPaneV2** | `ui/panes/search.rs` | User interaction, triggers play_song() |
-| **QueueService** | `services/queue_service.rs` | Manages queue state, sends AddSong commands |
-| **PlaybackService** | `services/playback_service.rs` | Handles playback commands, calls MpvAudioSource |
-| **MpvAudioSource** | `audio/mpv_source.rs` | Trait for pluggable audio sources |
-| **ConcatSource** | `audio/sources/concat.rs` | DEFAULT: Builds concat URLs for byte-perfect playback |
-| **AudioCache** | `audio/cache.rs` | Manages prefix files (~200KB each), LRU eviction |
-| **UrlResolver** | `url_resolver.rs` | Resolves video_id → stream URL, caches results |
-| **Orchestrator** | `orchestrator.rs` | Coordinates prefetch window, manages priorities |
+| **QueueStore** | `ui/app_store.rs` | TUI state, sends PlayIntent via IPC |
+| **play_intent handler** | `server/handlers/play_intent.rs` | Mutate queue, submit preload, trigger playback |
+| **CacheExecutor** | `services/cache_executor.rs` | **UNIFIED**: All cache access (preload + playback) |
+| **UrlResolver** | `url_resolver.rs` | Extract video_id → stream URL |
+| **AudioCache** | `audio/cache.rs` | Manage prefix files (~200KB each), LRU eviction |
+| **ConcatSource** | `audio/sources/concat.rs` | Build concat URLs for byte-perfect playback |
 | **MpvClient** | `mpv/client.rs` | IPC communication with MPV process |
+
+### Removed/Deprecated Components
+
+| Component | Status | Replaced By |
+|-----------|--------|-------------|
+| **PreloadScheduler** | DEPRECATED | CacheExecutor |
+| **Preparer** | DEPRECATED | CacheExecutor |
+| **PlaybackService.play()** | Refactored | Delegates to CacheExecutor |
 
 ---
 
-## AudioCache + ConcatSource Architecture (Current)
+## CacheExecutor Architecture (Current)
 
-The streaming architecture uses **byte-perfect concat+subfile** protocol.
+The streaming architecture uses **byte-perfect concat+subfile** protocol, coordinated by a **unified CacheExecutor**.
 
-### Current State
+### Current State (Rev 2)
 ```
-User → PlaybackService → MpvAudioSource → AudioCache → ConcatSource → MPV
-                              ↓                              ↓
-                         Prefix files              concat:/cache|subfile:URL
-                         (~200KB each)
+                    ┌──────────────────────────────────────┐
+                    │          CacheExecutor               │
+                    │  (Single owner of all cache access)  │
+                    └──────────────────┬───────────────────┘
+                                       │
+             ┌─────────────────────────┼─────────────────────────┐
+             │                         │                         │
+             ▼                         ▼                         ▼
+      ┌──────────────┐          ┌──────────────┐          ┌──────────────┐
+      │ UrlResolver  │          │ AudioCache   │          │    MPV       │
+      │ (extract URL)│          │ (prefix file)│          │ (playback)   │
+      └──────────────┘          └──────────────┘          └──────────────┘
 ```
+
+**Key principle**: No component calls UrlResolver or AudioCache directly. All requests go through CacheExecutor, which handles:
+- Request coalescing (in_flight map)
+- Tier-based priority (Immediate > Gapless > Eager > Background)
+- Deadline logic (Immediate: 200ms timeout → passthrough fallback)
+- Concurrency limits (2/2/2/1 per tier)
 
 ### Concat URL Construction
 
@@ -291,4 +383,5 @@ User → PlaybackService → MpvAudioSource → ProxySource → ProgressiveAudio
 
 - [audio-streaming.md](audio-streaming.md) - Detailed AudioCache and ConcatSource architecture
 - [playback-engine.md](playback-engine.md) - Overall engine architecture
-- [ADR-001](../adr/ADR-001-audio-streaming-architecture.md) - Architecture decision record
+- [ADR-001](../adr/ADR-001-audio-streaming-architecture.md) - Original streaming architecture decision
+- [ADR-002](../adr/ADR-002-playintent-architecture-2026-01-15.md) - **PlayIntent + Unified CacheExecutor** (current)
