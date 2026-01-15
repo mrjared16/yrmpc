@@ -238,6 +238,59 @@ use crate::backends::PlayerController;  // → BackendDispatcher
 
 ---
 
+## PlayIntent Architecture (2026-01-15)
+
+### Pattern: Intent-Based Playback
+```rust
+// OLD: Composed commands (blocking, slow)
+queue.clear()?;
+for song in songs { queue.add(song).await?; }  // Each add blocks on URL extraction
+player.play_pos(0)?;
+
+// NEW: Atomic intent (non-blocking, <500ms)
+queue.play(PlayIntent::Context { 
+    tracks: songs, 
+    offset: 0, 
+    shuffle: false 
+});
+```
+
+### Key Types
+- `PlayIntent`: Context, Next, Append, Radio(seed)
+- `PreloadTier`: Immediate > Gapless > Eager > Background
+- `RequestId`: u64 counter for dedup/cancel
+
+### PreloadScheduler (replaces AudioPrefetcher)
+- Priority lanes with concurrency limits: Immediate(∞), Gapless(2), Eager(1), Background(1)
+- Dedup: same (track, artifact) → escalate priority
+- Cancel: remove pending jobs by request_id
+
+### Preparer (three-stage pipeline)
+1. StreamUrl: Resolve playback URL (reuses CachedExtractor)
+2. AudioPrefix: Download first ~200KB (HTTP Range)
+3. MpvInput: Build Concat or Passthrough URL
+
+### Tier-Based Wait Policy
+- Immediate: Wait up to 200ms for prefix, then passthrough
+- Gapless/Eager/Background: Wait for full prefix
+
+### Lessons Learned
+
+**Intent at IPC boundary, composability inside engine**:
+- TUI sends single `ServerCommand::PlayWithIntent { intent, request_id }`
+- Daemon handler derives priorities and schedules preload jobs
+- Queue mutation and playback happen atomically
+
+**Passthrough fallback for latency**:
+- If prefix not ready within deadline, use direct stream URL
+- User hears audio immediately, quality may be slightly lower initially
+
+**Dedup with priority escalation**:
+- Background request for track A, then Immediate for same track
+- Job is escalated to Immediate lane, not duplicated
+
+---
+
 ## Documentation
 
 `CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | Beads CLI (`bd`) - Task management | `docs/arch/*.md` - Architectural decisions

@@ -67,6 +67,19 @@ Content is organized into typed sections for flexible rendering:
 - **SectionData**: Content variants (Items, Tracks, Stats, Actions, Paginated, Error)
 - **Dynamic Rendering**: UI renders sections based on their key and data type.
 
+## PlayIntent Command Pattern
+
+The PlayIntent architecture (ADR-002) provides atomic playback commands for low-latency music playback:
+
+- **TUI Layer**: `QueueStore.play(PlayIntent)` with optimistic update
+- **IPC Layer**: `ServerCommand::PlayWithIntent { intent, request_id }`
+- **Daemon Layer**: `handle_play_with_intent()` → PreloadScheduler → Preparer
+
+Key types:
+- `PlayIntent`: Context, Next, Append, Radio (seed-only v1)
+- `PreloadTier`: Immediate > Gapless > Eager > Background
+- `RequestId`: u64 counter for dedup/cancel
+
 ## Where to Look
 
 ### By Task
