@@ -1,0 +1,102 @@
+[2026-01-21T16:35:12.187Z INFO  rmpcd] Found cookie file at "~/.config/rmpc/cookie.txt"
+[2026-01-21T16:35:12.187Z INFO  rmpcd] Starting YouTube daemon at "/tmp/yrmpc-yt.sock"
+[2026-01-21T16:35:12.187Z INFO  rmpcd] Using cookies from "~/.config/rmpc/cookie.txt"
+[2026-01-21T16:35:12.187Z INFO  rmpcd] Using stream extractor: Ytx
+[2026-01-21T16:35:12.187Z INFO  rmpcd] Using audio source: FfmpegConcat
+[2026-01-21T16:35:12.188Z DEBUG rmpc::backends::youtube::api] Parsed 21 cookies
+[2026-01-21T16:35:12.214Z DEBUG reqwest::connect] starting new connection: https://music.youtube.com/
+[2026-01-21T16:35:13.193Z INFO  rmpc::backends::youtube::api] YouTube API initialized with cookies
+[2026-01-21T16:35:13.193Z INFO  rmpc::backends::youtube::server] Audio source: FfmpegConcat (cache: "~/.cache/rmpc/audio")
+[2026-01-21T16:35:13.193Z INFO  rmpc::backends::youtube::services::playback_service] Checking for existing MPV at socket: /tmp/yrmpc-yt.mpv.sock
+[2026-01-21T16:35:13.194Z INFO  rmpc::backends::youtube::services::playback_service] Socket file exists, attempting connection...
+[2026-01-21T16:35:13.194Z INFO  rmpc::backends::youtube::media::preparer] YouTubeMediaPreparer started
+[2026-01-21T16:35:13.194Z WARN  rmpc::backends::youtube::services::playback_service] Socket exists but connection failed - MPV may have crashed
+[2026-01-21T16:35:13.194Z INFO  rmpc::backends::youtube::services::playback_service] Spawning NEW MPV process with socket: /tmp/yrmpc-yt.mpv.sock
+[2026-01-21T16:35:13.294Z INFO  rmpc::backends::youtube::services::playback_service] ✓ NEW MPV ready (PID: 3601084) - fresh playlist state
+[2026-01-21T16:35:13.294Z INFO  rmpcd] YouTube daemon ready, entering event loop...
+[2026-01-21T16:35:13.294Z INFO  rmpc::backends::youtube::server] YouTube server listening on /tmp/yrmpc-yt.sock
+[2026-01-21T16:35:13.295Z INFO  rmpc::backends::youtube::services::playback_service] MPV property observation set up on event reader connection
+[2026-01-21T16:35:13.295Z INFO  rmpc::backends::youtube::services::playback_service] MPV event loop started
+[2026-01-21T16:35:13.295Z INFO  rmpc::backends::youtube::server] Internal event processor started
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: TrackChanged { position: -1 }
+[2026-01-21T16:35:13.310Z INFO  rmpc::backends::youtube::services::playback_service] Track changed to position -1
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: PauseChanged { paused: false }
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::services::playback_service] Pause state: false
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: IdleChanged { idle: true }
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::services::playback_service] Idle state: true
+[2026-01-21T16:35:13.310Z DEBUG rmpc::backends::youtube::server] Internal event processor received: TrackChanged { position: -1 }
+[2026-01-21T16:35:13.311Z DEBUG rmpc::backends::youtube::server] Internal event processor received: IdleChanged { idle: true }
+[2026-01-21T16:35:13.311Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("video-reconfig")
+[2026-01-21T16:35:13.311Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("idle")
+[2026-01-21T16:35:17.732Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rh')
+[2026-01-21T16:35:17.840Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:18.042Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhy')
+[2026-01-21T16:35:18.166Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:18.267Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhym')
+[2026-01-21T16:35:18.380Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:18.681Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhymSt')
+[2026-01-21T16:35:18.815Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:19.217Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhymS')
+[2026-01-21T16:35:19.334Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:19.435Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhym')
+[2026-01-21T16:35:19.543Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:19.644Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhymasti')
+[2026-01-21T16:35:19.762Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:19.863Z DEBUG rmpc::backends::youtube::api] YouTube API: get_suggestions(query='rhymastic')
+[2026-01-21T16:35:19.975Z DEBUG rmpc::backends::youtube::api] get_suggestions returned 6 suggestions
+[2026-01-21T16:35:20.076Z DEBUG rmpc::backends::youtube::api] YouTube API: search_items(query='rhymastic', raw='rhymastic')
+[2026-01-21T16:35:20.515Z INFO  rmpc::backends::youtube::api] search_items returned 21 items in 5 sections for 'rhymastic'
+[2026-01-21T16:35:20.515Z INFO  rmpc::backends::youtube::server::handlers::search] [SEARCH] Returning 26 MediaItem entries with section headers for query 'rhymastic'
+[2026-01-21T16:35:29.955Z DEBUG rmpc::backends::youtube::server::handlers::queue_events] QueueEvent::Cleared
+[2026-01-21T16:35:29.956Z INFO  rmpc::backends::youtube::server] AddSong command received: file=fJ9cJXotuXM, title=Some("Kho Báu (with Rhymastic)")
+[2026-01-21T16:35:29.956Z DEBUG rmpc::backends::youtube::server::handlers::queue] Added song to queue: id=1, video_id=fJ9cJXotuXM
+[2026-01-21T16:35:29.956Z DEBUG rmpc::backends::youtube::server::handlers::queue_events] QueueEvent::ItemsAdded: [1]
+[2026-01-21T16:35:29.956Z INFO  rmpc::backends::youtube::server] AddSong result: Ok
+[2026-01-21T16:35:29.956Z INFO  rmpc::backends::youtube::server::orchestrator] play_position_sync for pos=0 (uses cached URLs)
+[2026-01-21T16:35:29.956Z INFO  rmpc::backends::youtube::extractor::cached] [EXTRACT] cache_miss video_id=fJ9cJXotuXM version=1
+[2026-01-21T16:35:29.967Z DEBUG rmpc::backends::youtube::extractor::cached] [EXTRACT] coalescing video_id=fJ9cJXotuXM
+[2026-01-21T16:35:30.465Z DEBUG rmpc::backends::youtube::extractor::ytx] ytx extracted URL for fJ9cJXotuXM (len=1279)
+[2026-01-21T16:35:30.465Z INFO  rmpc::backends::youtube::extractor::cached] [EXTRACT] complete video_id=fJ9cJXotuXM elapsed=508.606049ms
+[2026-01-21T16:35:30.465Z INFO  rmpc::backends::youtube::audio::cache] [CACHE] miss video_id=fJ9cJXotuXM downloading prefix...
+[2026-01-21T16:35:30.488Z DEBUG reqwest::connect] starting new connection: https://rr10---sn-8pxuuxa-nbos6.googlevideo.com/
+[2026-01-21T16:35:30.494Z DEBUG reqwest::connect] starting new connection: https://rr10---sn-8pxuuxa-nbos6.googlevideo.com/
+[2026-01-21T16:35:30.517Z INFO  rmpc::backends::youtube::audio::cache] [CACHE] miss video_id=fJ9cJXotuXM downloading prefix...
+[2026-01-21T16:35:30.528Z INFO  rmpc::backends::youtube::audio::cache] [CACHE] downloaded video_id=fJ9cJXotuXM size=204800 content_length=7267888 elapsed=62.768962ms
+[2026-01-21T16:35:30.528Z INFO  rmpc::backends::youtube::services::playback_service] [PLAYBACK] build_url video_id=fJ9cJXotuXM mode=CONCAT
+[2026-01-21T16:35:30.528Z INFO  rmpc::backends::youtube::services::playback_service] [PLAYBACK] playlist_append url="lavf://concat:~/.cache/rmpc/audio/fJ9cJXotuXM.webm|subfile,,start,204800,end,0,,:https:/..."
+[2026-01-21T16:35:30.528Z DEBUG rmpc::backends::youtube::server::orchestrator] Prefetched track 0 (queue pos 0) via cached URL
+[2026-01-21T16:35:30.529Z INFO  rmpc::backends::youtube::server::orchestrator] Playing position 0 (prefetched 1 tracks)
+[2026-01-21T16:35:30.529Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("start-file")
+[2026-01-21T16:35:30.529Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: TrackChanged { position: 0 }
+[2026-01-21T16:35:30.530Z INFO  rmpc::backends::youtube::services::playback_service] Track changed to position 0
+[2026-01-21T16:35:30.530Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: IdleChanged { idle: false }
+[2026-01-21T16:35:30.530Z DEBUG rmpc::backends::youtube::services::playback_service] Idle state: false
+[2026-01-21T16:35:30.530Z DEBUG rmpc::backends::youtube::server] Internal event processor received: TrackChanged { position: 0 }
+[2026-01-21T16:35:30.530Z DEBUG rmpc::backends::youtube::server] Internal event processor received: IdleChanged { idle: false }
+[2026-01-21T16:35:30.539Z DEBUG reqwest::connect] starting new connection: https://rr10---sn-8pxuuxa-nbos6.googlevideo.com/
+[2026-01-21T16:35:30.576Z INFO  rmpc::backends::youtube::audio::cache] [CACHE] downloaded video_id=fJ9cJXotuXM size=204800 content_length=7267888 elapsed=59.590626ms
+[2026-01-21T16:35:30.624Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("audio-reconfig")
+[2026-01-21T16:35:30.627Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("audio-reconfig")
+[2026-01-21T16:35:30.627Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("video-reconfig")
+[2026-01-21T16:35:30.627Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("file-loaded")
+[2026-01-21T16:35:30.698Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("audio-reconfig")
+[2026-01-21T16:35:30.736Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("playback-restart")
+[2026-01-21T16:38:27.076Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("audio-reconfig")
+[2026-01-21T16:38:27.076Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: EndFile { reason: "eof", file_error: None }
+[2026-01-21T16:38:27.076Z INFO  rmpc::backends::youtube::services::playback_service] Track ended: eof
+[2026-01-21T16:38:27.076Z DEBUG rmpc::backends::youtube::server] Internal event processor received: EndFile { reason: "eof" }
+[2026-01-21T16:38:27.076Z INFO  rmpc::backends::youtube::server::orchestrator] Track ended with reason: eof
+[2026-01-21T16:38:27.076Z INFO  rmpc::backends::youtube::server::orchestrator] [DIAG-EOF] handle_eof: repeat_mode=Off current_idx=Some(0) queue_len=1
+[2026-01-21T16:38:27.076Z INFO  rmpc::backends::youtube::server::orchestrator] [DIAG-EOF] Captured intent: Stop
+[2026-01-21T16:38:27.076Z INFO  rmpc::backends::youtube::server::orchestrator] EOF transition pending, waiting for MPV event confirmation
+[2026-01-21T16:38:29.977Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("audio-reconfig")
+[2026-01-21T16:38:29.977Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("video-reconfig")
+[2026-01-21T16:38:29.977Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: Other("idle")
+[2026-01-21T16:38:29.978Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: TrackChanged { position: -1 }
+[2026-01-21T16:38:29.978Z WARN  rmpc::backends::youtube::server::orchestrator] [DIAG-EOF] PendingAdvance timeout (2s), falling back to MPV playlist-pos=-1
+[2026-01-21T16:38:29.978Z INFO  rmpc::backends::youtube::server::orchestrator] [DIAG-EOF] Intent::Stop - end of queue
+[2026-01-21T16:38:29.978Z INFO  rmpc::backends::youtube::services::playback_service] Track changed to position -1
+[2026-01-21T16:38:29.978Z DEBUG rmpc::backends::youtube::services::playback_service] MPV event: IdleChanged { idle: true }
+[2026-01-21T16:38:29.978Z DEBUG rmpc::backends::youtube::services::playback_service] Idle state: true
+[2026-01-21T16:38:29.978Z DEBUG rmpc::backends::youtube::server] Internal event processor received: TrackChanged { position: -1 }
+[2026-01-21T16:38:29.979Z DEBUG rmpc::backends::youtube::server] Internal event processor received: IdleChanged { idle: true }

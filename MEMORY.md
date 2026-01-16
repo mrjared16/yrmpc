@@ -291,6 +291,40 @@ queue.play(PlayIntent::Context {
 
 ---
 
+## Media Preparation Architecture (ADR-003) - 2026-01-20
+
+**Status**: ✅ Migration Complete
+
+### Trait Hierarchy
+- `MediaPreparer` - Core trait for media preparation (prepare, prefetch, cancel)
+- `StreamResolver` - Resolves video IDs to stream URLs
+- `AudioLoader` - Handles audio caching/downloading
+- `MpvInputBuilder` - Builds MPV input (concat files or direct URLs)
+
+### File Locations
+| Component | Path |
+|-----------|------|
+| Traits | `rmpc/src/backends/youtube/media/` (mod.rs, resolver.rs, loader.rs, output.rs) |
+| Implementation | `rmpc/src/backends/youtube/media/preparer.rs` (YouTubeMediaPreparer) |
+| Service Registry | `rmpc/src/backends/youtube/services/registry.rs` (YouTubeServices) |
+
+### Key Types
+- `YouTubeMediaPreparer` - Actor managing preparation queue
+- `YouTubeMediaPreparerHandle` - Channel sender for commands
+- `PreloadTier` - Priority levels (Immediate, NextUp, Prefetch)
+- `PrepareRequest/PrepareResult` - Request/response types
+
+### Design Principle
+"Functional core, imperative shell" - Traits are pure interfaces, implementations handle IO.
+
+### Migration Phases (All Complete)
+1. ✅ Define traits (MediaPreparer, StreamResolver, AudioLoader, MpvInputBuilder)
+2. ✅ Implement traits on existing types
+3. ✅ Daemon integration (Arc<dyn MediaPreparer>)
+4. ✅ Rename CacheExecutor→YouTubeMediaPreparer, moved to media/ module
+
+---
+
 ## Documentation
 
 `CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | Beads CLI (`bd`) - Task management | `docs/arch/*.md` - Architectural decisions

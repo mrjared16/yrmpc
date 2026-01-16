@@ -257,6 +257,101 @@ std::thread::Builder::new()
     .expect("Image thread to be spawned");
 ```
 
+## Request Deduplication: `Dedup<K, V>`
+
+**Location**: `shared/dedup.rs` (proposed)
+
+When multiple concurrent requests target the same resource, use `Dedup` to ensure only one computation runs.
+
+### The Problem
+
+```
+Thread 1: ensure_prefix("abc") ──┐
+                                 ├──► BOTH download same file!
+Thread 2: ensure_prefix("abc") ──┘
+```
+
+Observed in `daemon.log`:
+```
+[16:35:30.465Z] [CACHE] miss video_id=fJ9cJXotuXM downloading...
+[16:35:30.517Z] [CACHE] miss video_id=fJ9cJXotuXM downloading...  ← DUPLICATE
+```
+
+### The Pattern
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Dedup<K, V>                        │
+│  slots: DashMap<K, Arc<Slot<V>>>                        │
+│                                                         │
+│  Slot<V> {                                              │
+│      value: OnceLock<V>,    ← stores result             │
+│      notify: Notify,        ← wakes waiters             │
+│  }                                                      │
+│                                                         │
+│  get_or_init(key, || compute)                           │
+│       │                                                 │
+│  ┌────┴────┐                                            │
+│  ▼         ▼                                            │
+│ [NEW]   [EXISTS]                                        │
+│  │         │                                            │
+│  │    value filled? ─── yes ──► return clone            │
+│  │         │ no                                         │
+│  │    notify.wait() ← follower waits                    │
+│  │         │                                            │
+│  │    return clone                                      │
+│  │                                                      │
+│  ▼                                                      │
+│ compute() ← only leader does work                       │
+│  │                                                      │
+│ store + notify_waiters()                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Usage
+
+```rust
+use crate::shared::dedup::Dedup;
+
+struct AudioCache {
+    dedup: Dedup<String, PathBuf>,
+    // ...
+}
+
+impl AudioCache {
+    async fn ensure_prefix(&self, video_id: &str, url: &str) -> Result<PathBuf> {
+        self.dedup.get_or_init(
+            video_id.to_string(),
+            || self.download_prefix_inner(video_id, url)
+        ).await
+    }
+}
+```
+
+### When to Use
+
+| Scenario | Use Dedup? |
+|----------|------------|
+| Multiple callers may request same resource | ✅ Yes |
+| Resource is expensive to compute/fetch | ✅ Yes |
+| Fire-and-forget (no result needed) | ❌ No, use HashSet guard |
+| Single-threaded context | ❌ No, unnecessary |
+
+### Existing Patterns (Before Dedup)
+
+| Component | Pattern | Status |
+|-----------|---------|--------|
+| `CachedExtractor` | `HashMap<K, Arc<OnceLock<V>>>` | Good, but hardcoded |
+| `ImageCache` | `pending_fetch: HashSet` | Fire-and-forget |
+| `AudioCache` | None | **BUG** - needs Dedup |
+| `MediaPreparer` | `InFlightJob + Notify` | Good, but hardcoded |
+
+**Goal**: Migrate hardcoded patterns to shared `Dedup<K, V>` abstraction.
+
+See: [ADR-003-part6](../adr/ADR-003-part6-request-coalescing.md) for full design rationale.
+
+---
+
 ## Error Handling in Background Threads
 
 ### Pattern: Log and Continue

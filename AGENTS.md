@@ -13,9 +13,15 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 ./rmpc/target/debug/rmpc --config ./config/rmpc.ron  # Start TUI
 ```
 
-**Verify changes**: `cargo fmt && cargo clippy && cargo test`
+**Verify changes**: `cargo fmt && cargo clippy && cargo nextest run`
 
 > **Note**: Only use `--release` after confirming all changes work. Release build takes ~4 min.
+
+---
+
+## CRITICAL: Design for testability using "functional core, imperative shell"
+
+- Keep pure business logic separate from code that does IO.
 
 ---
 
@@ -46,6 +52,7 @@ There is NO `Cargo.toml` at the workspace root. The main crate is in `rmpc/`.
 A common bug pattern: implementing components that compile and pass unit tests, but are **never actually called** at runtime.
 
 **Symptoms:**
+
 - Feature works in tests but not in production
 - Code exists but has no observable effect
 - Stub methods (always return false/None) never replaced with real logic
@@ -60,12 +67,14 @@ A common bug pattern: implementing components that compile and pass unit tests, 
 ### Example: Audio Cache Bug (2026-01)
 
 **What happened:**
+
 - `FfmpegConcatSource` implemented with `ensure_prefix()` for downloading
 - `build_mpv_input()` checked if cache exists but **never called download**
 - `has_cached_audio()` was a stub returning `false` always
 - Result: Cache feature "worked" in tests but never created files
 
 **How to prevent:**
+
 ```rust
 // RED FLAG: Stub that always returns false/None
 pub fn has_cached_audio(&self, _video_id: &str) -> bool {
@@ -145,6 +154,7 @@ bd close <id>                         # Complete it
 ```
 
 **Session close** (ephemeral branch, no push):
+
 ```bash
 git add -A && git commit -m "..."
 bd sync --from-main                   # Pull beads updates
@@ -190,6 +200,7 @@ bd sync --from-main                   # Pull beads updates
 **Critical cookies:** `SAPISID`, `__Secure-3PAPISID`
 
 **Common auth errors in logs:**
+
 - `"No cookies found"` → File missing or wrong path
 - `"401 Unauthorized"` → Cookies expired, need refresh
 - `"403 Forbidden"` → Missing critical cookies
@@ -201,11 +212,13 @@ bd sync --from-main                   # Pull beads updates
 ## Debugging
 
 ### Enable Logs
+
 ```bash
 RUST_LOG=debug ./target/release/rmpc 2> debug.log
 ```
 
 ### Check MPV Process
+
 ```bash
 pgrep -af mpv                    # Is MPV running?
 ls -la /tmp/rmpc-mpv.sock        # Check socket

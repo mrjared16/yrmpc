@@ -69,16 +69,18 @@ Content is organized into typed sections for flexible rendering:
 
 ## PlayIntent Command Pattern
 
-The PlayIntent architecture (ADR-002) provides atomic playback commands for low-latency music playback:
+The PlayIntent architecture (ADR-002) provides atomic playback commands for low-latency playback with a shared preparation core:
 
 - **TUI Layer**: `QueueStore.play(PlayIntent)` with optimistic update
 - **IPC Layer**: `ServerCommand::PlayWithIntent { intent, request_id }`
-- **Daemon Layer**: `handle_play_with_intent()` → PreloadScheduler → Preparer
+- **Daemon Layer**: `handle_play_with_intent()` → `orchestrator::play_position_sync(...)` → `MediaPreparer::prepare`
 
 Key types:
 - `PlayIntent`: Context, Next, Append, Radio (seed-only v1)
 - `PreloadTier`: Immediate > Gapless > Eager > Background
 - `RequestId`: u64 counter for dedup/cancel
+
+Playback URL construction is centralized at runtime in `FfmpegConcatSource::build_from_prepared` (`rmpc/src/backends/youtube/audio/sources/concat.rs`).
 
 ## Where to Look
 
