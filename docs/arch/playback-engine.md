@@ -1,140 +1,123 @@
 # Playback Engine Architecture
 
 ## Purpose
-Defines the internal components of the playback system: MPV integration, URL extraction, audio caching, and gapless playback.
+
+Defines the current playback pipeline for YouTube mode: planning transport, preparing media, building MPV input, and keeping queue state synchronized with MPV.
 
 ## When to Read
-- **Symptoms**: MPV not responding, URL extraction fails, audio gaps between tracks, cache misses
-- **Tasks**: Modify MPV settings, add new extractor, tune cache parameters
+
+- **Symptoms**: playback does not start, first-track delay is too high, prefetch behaves unexpectedly, EOF handling looks wrong
+- **Tasks**: update playback flow, adjust transport strategy, debug preparation/cancellation behavior
 
 ## Architecture Overview
 
-The playback engine follows a **Two-Layer Architecture** (see [PlayQueue Architecture](play-queue.md) for details).
+The engine is a two-layer design:
+
+1. **PlayQueue state layer** (`rmpc/src/shared/play_queue/mod.rs`) tracks order/repeat/shuffle.
+2. **Playback bridge layer** (`rmpc/src/backends/youtube/server/orchestrator.rs`) executes playback, prefetch, and MPV sync.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                       Layer 1: PlayQueue (State)                        │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  Pure State Machine                                              │   │
-│  │  Items, Order, Shuffle/Repeat Modes                              │   │
-│  │  Emits: QueueEvents                                              │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
+│ Layer 1: PlayQueue (state, ordering, repeat/shuffle)                  │
 └───────────────────────────────────┬─────────────────────────────────────┘
-                                    │ Events
+                                    │ queue state + prefetch window
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                       Layer 2: Playback Bridge                          │
-│  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  Orchestrator (Event Loop)                                       │   │
-│  │    │                                                             │   │
-│  │    ├──► URL Resolver (ytx/yt-dlp)                                │   │
-│  │    ├──► Audio Prefetcher (Disk Cache)                            │   │
-│  │    ├──► MPV Controller (IPC)                                     │   │
-│  │    └──► PendingAdvance FSM (Transitions)                         │   │
-│  └──────────────────────────────────────────────────────────────────┘   │
+│ Layer 2: Orchestrator + MediaPreparer + MPV                           │
+│ 1) plan(mode) -> AudioSourcePlan                                      │
+│ 2) prepare(track_id, tier) -> PreparedMedia                           │
+│ 3) build_from_prepared(prepared) -> MpvInput                          │
+│ 4) playlist_append_input / playlist_play_index                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## PreloadScheduler (replaces AudioPrefetcher)
+## Transport Planning
 
-Priority-based preload scheduling for streaming audio:
+`AudioSourcePlanner` in `rmpc/src/backends/youtube/audio/planner.rs` is the authoritative mode-to-behavior mapping.
 
-### Priority Lanes
-| Lane | Concurrency | Use Case |
-|------|-------------|----------|
-| Immediate | ∞ | Currently playing track |
-| Gapless | 2 | Next track for seamless transition |
-| Eager | 1 | Upcoming tracks in queue |
-| Background | 1 | Speculative preloading |
+| Mode | Transport | Prepare Action | Prefetch Policy | MPV Reconnect |
+|------|-----------|----------------|-----------------|---------------|
+| `Combined` | `AudioTransportTarget::Combined` | `StagePrefix` | `StagePrefix` | `false` |
+| `Direct` | `AudioTransportTarget::DirectUrl` | `ResolveOnly` | `ResolveOnly` | `true` |
+| `Relay` | `AudioTransportTarget::LocalRelay` | `StagePrefix` | `StagePrefix` | `true` |
 
-### Preparer Pipeline
-1. **StreamUrl**: Resolve playback URL (cached extractor)
-2. **AudioPrefix**: Download first ~200KB (HTTP Range request)
-3. **MpvInput**: Build Concat (with prefix) or Passthrough URL
+## Shared Preparation Core
 
-### Tier-Based Wait Policy
-- Immediate: Wait up to 200ms, then passthrough if prefix not ready
-- Gapless/Eager/Background: Wait for full prefix completion
+`MediaPreparer` (`rmpc/src/backends/youtube/media/mod.rs`) is the single public contract:
 
-### Audio Source & Caching
-- **Goal**: Instant playback start with byte-perfect audio via cached prefixes.
-- **Architecture**: Pluggable `MpvAudioSource` trait (Strategy Pattern)
-  - `ConcatSource` (DEFAULT): Uses ffmpeg concat+subfile protocol
-  - `ProxySource` (FUTURE): HTTP server for offline mode, metrics
-- **AudioCache**: Manages prefix files (~200KB per song)
-  - Path: `~/.cache/rmpc/audio/{video_id}.m4a`
-  - Budget: <200MB with LRU eviction
-  - API: `ensure_prefix(video_id)` guarantees instant start
-- **Concat URL**: `concat:/cache/{id}.m4a|subfile,,start,{OFFSET},end,0,,:${URL}`
-- See: [audio-streaming.md](audio-streaming.md) for detailed architecture (ADR-001).
+- `prepare(track_id, tier) -> Result<PreparedMedia>`
+- `prefetch(track_id, tier)`
+- `activate_playback_window(track_ids)`
 
-### MPV Controller & Sync
-The Bridge maintains "What you see is what you hear" via atomic playlist management.
+Current YouTube implementation: `YouTubeMediaPreparerHandle` / `YouTubeMediaPreparer` in `rmpc/src/backends/youtube/media/preparer.rs`.
 
-- **On Track Change**: MPV plays file -> Bridge detects `end-file` -> FSM advances state.
-- **On Shuffle Toggle**:
-  - Layer 1 reshuffles `play_order`.
-  - Layer 2 receives `OrderChanged`.
-  - Bridge calculates diff and sends `loadfile ... append` commands to MPV to match new order.
-  - **Invariant**: Current playing track is NEVER stopped during shuffle.
+### Preparation Behavior
 
-## State Management & Reliability
+- URL resolution and prefix download are coalesced by per-track in-flight jobs.
+- Prefix preloads are bounded (`MAX_PENDING_PRELOADS = 8`).
+- Priority queue + semaphores enforce tier concurrency:
+  - Immediate: 2
+  - Gapless: 2
+  - Eager: 2
+  - Background: 1
+- Cancellation is request-aware and window-aware:
+  - `Cancel { request_id }` aborts jobs when no remaining request maps to that track.
+  - `ActivateWindow` drops stale queued jobs and cancels obsolete in-flight tracks.
 
-### PendingAdvance FSM
-We do NOT rely on MPV's internal state for critical logic due to race conditions.
+### Fallback Semantics
 
-- **States**:
-  - `Idle`
-  - `Playing`
-  - `PendingAdvance` (Wait for confirmation)
-- **Flow**:
-  1. MPV sends `end-file`.
-  2. FSM checks `PlayQueue` repeat mode.
-  3. FSM determines intent (e.g., `RepeatOne` -> Seek 0, `Next` -> Load next).
-  4. FSM executes intent and waits for `TrackChanged`.
+For `PreloadTier::Immediate`, `wait_for_prefix_result` may return direct URL fallback when:
 
-### Epoch-Based Event Processing
-To handle async races (e.g., user mashes "Next" while prefetch is running):
-- `PlayQueue` maintains a `state_epoch`.
-- All `QueueEvent`s carry this epoch.
-- Bridge handlers discard events with stale epochs (`event.epoch < current_epoch`).
+- deadline timeout occurs, or
+- prefix staging fails.
+
+Gapless/Eager/Background tiers wait for normal staged completion.
+
+## Runtime MPV Input Builder
+
+`FfmpegConcatSource::build_from_prepared` in `rmpc/src/backends/youtube/audio/sources/concat.rs` is the authoritative runtime builder:
+
+- `PreparedMedia::StagedPrefix`:
+  - if `bytes >= content_length`: play local file directly
+  - otherwise: build `lavf://concat:{path}|subfile,,start,{bytes},end,0,,:{url}` and provide protocol whitelist args
+- `PreparedMedia::Direct`: pass URL through
+- `PreparedMedia::LocalFile`: pass local path through
+
+`PlaybackService::playlist_append_input` (`rmpc/src/backends/youtube/services/playback_service.rs`) applies runtime args and issues `loadfile ... append`.
+
+## Relay Status
+
+Relay is a **boundary contract** today, not an active runtime server. See `rmpc/src/backends/youtube/media/relay.rs`.
+
+- Defines request/response/range/session contracts.
+- Validates staged-prefix inputs via `RelaySessionSpec::try_from_prepared`.
+- Encodes single-range-or-full policy and relay-owned reconnect ownership.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `rmpc/src/shared/play_queue.rs` | **Layer 1**: Pure state machine |
-| `rmpc/src/backends/youtube/bridge/` | **Layer 2**: Event handlers |
-| `rmpc/src/backends/youtube/audio/mod.rs` | Audio module exports |
-| `rmpc/src/backends/youtube/audio/cache.rs` | AudioCache (prefix files, LRU) |
-| `rmpc/src/backends/youtube/audio/mpv_source.rs` | MpvAudioSource trait |
-| `rmpc/src/backends/youtube/audio/sources/concat.rs` | ConcatSource (DEFAULT) |
-| `rmpc/src/player/mpv.rs` | Low-level MPV IPC |
-
-## Configuration
-
-```ron
-// config/rmpc.ron
-playback: (
-    extractor: "ytx",           // or "yt-dlp"
-    cache_lookahead: 2,         // Pre-fetch N next tracks
-    url_ttl_seconds: 14400,     // 4 hours
-    mpv_socket: "/tmp/rmpc.sock",
-),
-```
+| `rmpc/src/shared/play_queue/mod.rs` | Queue order and playback state transitions |
+| `rmpc/src/backends/youtube/server/orchestrator.rs` | Playback bridge and MPV/queue sync |
+| `rmpc/src/backends/youtube/audio/planner.rs` | Delivery-mode planning |
+| `rmpc/src/backends/youtube/media/mod.rs` | MediaPreparer + PreparedMedia contract |
+| `rmpc/src/backends/youtube/media/preparer.rs` | Coalescing, bounded queue, cancellation |
+| `rmpc/src/backends/youtube/audio/sources/concat.rs` | Runtime MPV input builder |
+| `rmpc/src/backends/youtube/services/playback_service.rs` | MPV control and playlist append path |
+| `rmpc/src/backends/youtube/media/relay.rs` | Relay transport contract boundary |
 
 ## Debugging Checklist
 
-| Symptom | Likely Cause | File |
-|---------|--------------|------|
-| Queue order in TUI != Audio | Bridge failed to handle `OrderChanged` | `bridge/handlers.rs` |
-| "No cookies found" | Auth issue affecting `ytx` | `~/.config/rmpc/cookie.txt` |
-| Audio gap at track start | Prefix not cached | `audio/cache.rs` |
-| "protocol_whitelist" error | Missing MPV args | `audio/sources/concat.rs` |
-| Single mode skips track | PendingAdvance FSM logic error | `bridge/fsm.rs` |
+| Symptom | Likely Cause | Check |
+|---------|--------------|-------|
+| First track falls back to direct too often | Immediate deadline misses | `media/preparer.rs` logs around fallback_reason |
+| Prefetch queue churns and drops work | Bounded queue pressure | `MAX_PENDING_PRELOADS` + queue trim logs |
+| Track prep not cancelled when it should be | request_id mapping still present | cancel path in `handle_cancel_request` |
+| Playback URL shape unexpected | wrong `PreparedMedia` variant | `build_from_prepared` decision path |
+| Relay behavior assumptions mismatch runtime | relay is contract-only | `media/relay.rs` (no runtime server) |
 
 ## See Also
 
-- [docs/arch/play-queue.md](play-queue.md) - Detailed queue architecture
-- [docs/arch/audio-streaming.md](audio-streaming.md) - Progressive streaming architecture (ADR-001)
-- [docs/features/playback.md](../features/playback.md) - End-to-end playback flow
+- [docs/ARCHITECTURE-no-stutter-playback.md](../ARCHITECTURE-no-stutter-playback.md)
+- [docs/features/playback.md](../features/playback.md)
+- [docs/adr/ADR-003-part5-decision.md](../adr/ADR-003-part5-decision.md)

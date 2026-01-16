@@ -4,7 +4,7 @@
 
 | Order | File | Purpose |
 |-------|------|---------|
-| 1 | `AGENTS.md` (root) | Quick reference, beads workflow |
+| 1 | `AGENTS.md` (root) | Quick reference, br workflow |
 | 2 | `docs/ARCHITECTURE.md` | High-level overview + routing tables |
 | 3 | `docs/capabilities/README.md` | Required vs optional capabilities |
 | 4 | Feature/primitive doc from routing table | Deep dive for your task |
@@ -59,6 +59,13 @@
 ### Architecture Decision Records
 - [ADR-001: Audio Streaming Architecture](adr/ADR-001-audio-streaming-architecture.md)
 - [ADR-002: PlayIntent Architecture](adr/ADR-002-playintent-architecture-2026-01-15.md)
+- **ADR-003: MediaPreparer Architecture** (multi-part)
+  - [Part 1: Context](adr/ADR-003-part1-context.md) - Evolution from CacheExecutor
+  - [Part 2: Problems](adr/ADR-003-part2-problems.md) - Coupling, bypass, naming issues
+  - [Part 3: Solution](adr/ADR-003-part3-solution.md) - Trait-based architecture
+  - [Part 4: Extensibility](adr/ADR-003-part4-extensibility.md) - Decorator scenarios
+  - [Part 5: Decision](adr/ADR-003-part5-decision.md) - Final adoption
+  - [Part 6: Request Coalescing](adr/ADR-003-part6-request-coalescing.md) - `Dedup<K,V>` abstraction
 
 ## By Task
 
@@ -94,4 +101,4 @@ yrmpc/
 └── ytmapi-yrmpc/           # YouTube API client (submodule)
 ```
 
-Last updated: 2025-01-11
+Last updated: 2026-03-13
