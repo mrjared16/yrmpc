@@ -26,7 +26,7 @@ The engine is a two-layer design:
 │ Layer 2: Orchestrator + MediaPreparer + MPV                           │
 │ 1) plan(mode) -> AudioSourcePlan                                      │
 │ 2) prepare(track_id, tier) -> PreparedMedia                           │
-│ 3) build_from_prepared(prepared) -> MpvInput                          │
+│ 3) build_runtime_input(track_id, prepared) -> MpvInput                │
 │ 4) playlist_append_input / playlist_play_index                         │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -66,32 +66,35 @@ Current YouTube implementation: `YouTubeMediaPreparerHandle` / `YouTubeMediaPrep
 
 ### Fallback Semantics
 
-For `PreloadTier::Immediate`, `wait_for_prefix_result` may return direct URL fallback when:
+For `PreloadTier::Immediate`, `wait_for_prefix_result` may return:
 
-- deadline timeout occurs, or
-- prefix staging fails.
+- **`StreamAndCache`** (normal path): tee-prefix download plays via relay while caching to disk. This is the default for immediate cache-miss relay playback.
+- **`DirectFallback`**: if relay setup fails entirely (not just prefix timeout), the coordinator swaps ownership to `TrackOwner::DirectFallback` and hands MPV a plain URL. This is the last-resort fallback.
 
 Gapless/Eager/Background tiers wait for normal staged completion.
 
 ## Runtime MPV Input Builder
 
-`FfmpegConcatSource::build_from_prepared` in `rmpc/src/backends/youtube/audio/sources/concat.rs` is the authoritative runtime builder:
+`PlaybackService::build_runtime_input` in `rmpc/src/backends/youtube/services/playback_service.rs` is the authoritative runtime boundary:
 
-- `PreparedMedia::StagedPrefix`:
-  - if `bytes >= content_length`: play local file directly
-  - otherwise: build `lavf://concat:{path}|subfile,,start,{bytes},end,0,,:{url}` and provide protocol whitelist args
-- `PreparedMedia::Direct`: pass URL through
-- `PreparedMedia::LocalFile`: pass local path through
+- **LocalRelay Transport**: delegates to `RelayRuntime::register_session` to serve an HTTP endpoint matching the staging plan and streaming local bytes.
+- **Combined/Direct Transport**: delegates to `FfmpegConcatSource::build_from_prepared`:
+  - `PreparedMedia::StagedPrefix`:
+    - if `bytes >= content_length`: play local file directly
+    - otherwise: build `lavf://concat:{path}|subfile,,start,{bytes},end,0,,:{url}` and provide protocol whitelist args
+  - `PreparedMedia::StreamAndCache`: relay streams the URL while tee-prefix downloads cache in background (default for immediate cache-miss relay)
+  - `PreparedMedia::Direct`: pass URL through (fallback only)
+  - `PreparedMedia::LocalFile`: pass local path through
 
-`PlaybackService::playlist_append_input` (`rmpc/src/backends/youtube/services/playback_service.rs`) applies runtime args and issues `loadfile ... append`.
+`PlaybackService::playlist_append_input` then applies runtime args and issues `loadfile ... append`.
 
 ## Relay Status
 
-Relay is a **boundary contract** today, not an active runtime server. See `rmpc/src/backends/youtube/media/relay.rs`.
+Relay is fully implemented as an active local daemon (`RelayRuntime`) in `rmpc/src/backends/youtube/media/relay_runtime.rs`.
 
-- Defines request/response/range/session contracts.
-- Validates staged-prefix inputs via `RelaySessionSpec::try_from_prepared`.
-- Encodes single-range-or-full policy and relay-owned reconnect ownership.
+- Serves HTTP streaming at a dynamic port bound to `127.0.0.1`.
+- Bridges cached prefix content with live HTTP upstream fetching via `reqwest`.
+- Employs strict HTTP range checking and enforcing session lifetimes on endpoints.
 
 ## Key Files
 
@@ -102,9 +105,9 @@ Relay is a **boundary contract** today, not an active runtime server. See `rmpc/
 | `rmpc/src/backends/youtube/audio/planner.rs` | Delivery-mode planning |
 | `rmpc/src/backends/youtube/media/mod.rs` | MediaPreparer + PreparedMedia contract |
 | `rmpc/src/backends/youtube/media/preparer.rs` | Coalescing, bounded queue, cancellation |
-| `rmpc/src/backends/youtube/audio/sources/concat.rs` | Runtime MPV input builder |
-| `rmpc/src/backends/youtube/services/playback_service.rs` | MPV control and playlist append path |
-| `rmpc/src/backends/youtube/media/relay.rs` | Relay transport contract boundary |
+| `rmpc/src/backends/youtube/audio/sources/concat.rs` | FFmpeg subset input builder |
+| `rmpc/src/backends/youtube/services/playback_service.rs` | Routing boundary for MPV transport and control |
+| `rmpc/src/backends/youtube/media/relay_runtime.rs` | Local HTTP daemon relay server |
 
 ## Debugging Checklist
 
@@ -114,10 +117,11 @@ Relay is a **boundary contract** today, not an active runtime server. See `rmpc/
 | Prefetch queue churns and drops work | Bounded queue pressure | `MAX_PENDING_PRELOADS` + queue trim logs |
 | Track prep not cancelled when it should be | request_id mapping still present | cancel path in `handle_cancel_request` |
 | Playback URL shape unexpected | wrong `PreparedMedia` variant | `build_from_prepared` decision path |
-| Relay behavior assumptions mismatch runtime | relay is contract-only | `media/relay.rs` (no runtime server) |
+| Relay behavior assumptions mismatch runtime | Stale session/invalid range | Check `relay_runtime.rs` logs / `RelaySessionState` |
 
 ## See Also
 
-- [docs/ARCHITECTURE-no-stutter-playback.md](../ARCHITECTURE-no-stutter-playback.md)
-- [docs/features/playback.md](../features/playback.md)
-- [docs/adr/ADR-003-part5-decision.md](../adr/ADR-003-part5-decision.md)
+- [playback-flow.md](playback-flow.md) — **canonical current playback behavior**
+- [audio-streaming.md](audio-streaming.md) — transport/cache deep dive
+- [ADR-004](../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) — relay architecture rationale
+- [ADR-003 summary](../adr/ADR-003-media-preparer-architecture.md)

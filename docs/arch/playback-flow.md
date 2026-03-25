@@ -156,5 +156,5 @@ Relay diagnostics now log a single request-start record per client request plus 
 
 - [playback-engine.md](playback-engine.md)
 - [../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md](../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md)
-- [ARCHITECTURE-no-stutter-playback.md](../ARCHITECTURE-no-stutter-playback.md)
+- [ARCHITECTURE-no-stutter-playback.md](ARCHITECTURE-no-stutter-playback.md)
 - [../features/playback.md](../features/playback.md)

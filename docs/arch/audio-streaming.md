@@ -1,7 +1,7 @@
 # Audio Streaming Architecture
 
 ## Purpose
-Documents the pluggable audio source architecture with byte-perfect playback using ffmpeg's concat+subfile protocol. This replaces the previous EDL approach which had timing gaps.
+Documents the pluggable audio source architecture for concat and relay playback paths. The concat path provides byte-perfect playback using ffmpeg's concat+subfile protocol, while the relay path serves the same staged-prefix artifacts over localhost HTTP.
 
 **Authoritative Reference**: [ADR-001](../adr/ADR-001-audio-streaming-architecture.md)
 
@@ -17,19 +17,19 @@ Documents the pluggable audio source architecture with byte-perfect playback usi
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌──────────────────┐    ┌───────────────────────────────────────────────┐  │
-│  │ PlaybackService  │───►│ MpvAudioSource (Trait - Strategy Pattern)     │  │
+│  │ PlaybackService  │───►│ Runtime Transport Boundary                    │  │
 │  └──────────────────┘    │                                               │  │
 │                          │  ┌─────────────────────────────────────────┐  │  │
-│                          │  │ ConcatSource (DEFAULT)                  │  │  │
+│                          │  │ FfmpegConcatSource                      │  │  │
 │                          │  │ - Uses ffmpeg concat+subfile protocol   │  │  │
 │                          │  │ - Byte-perfect playback                 │  │  │
 │                          │  │ - Stateless, ~50 lines                  │  │  │
 │                          │  └─────────────────────────────────────────┘  │  │
 │                          │                                               │  │
 │                          │  ┌─────────────────────────────────────────┐  │  │
-│                          │  │ ProxySource (FUTURE)                    │  │  │
-│                          │  │ - HTTP server for offline mode          │  │  │
-│                          │  │ - Metrics, URL refresh                  │  │  │
+│                          │  │ RelayRuntime (LocalRelay)               │  │  │
+│                          │  │ - Local HTTP daemon over TCP            │  │  │
+│                          │  │ - Streams staged prefix + upstream      │  │  │
 │                          │  └─────────────────────────────────────────┘  │  │
 │                          └───────────────────────────────────────────────┘  │
 │                                           │                                  │
@@ -52,29 +52,16 @@ Documents the pluggable audio source architecture with byte-perfect playback usi
 
 ## Component Details
 
-### MpvAudioSource Trait
+### Runtime Transport Boundary
 
-**Location**: `rmpc/src/backends/youtube/audio/mpv_source.rs`
+**Location**: `rmpc/src/backends/youtube/services/playback_service.rs`
 
-The pluggable interface for audio source strategies. Uses the Strategy Pattern to allow swapping implementations.
-
-```rust
-pub struct MpvInput {
-    pub url: String,
-    pub mpv_args: Vec<String>,
-}
-
-pub trait MpvAudioSource: Send {
-    fn startup(&mut self) -> anyhow::Result<()> { Ok(()) }
-    fn shutdown(&mut self) {}
-    fn build_mpv_input(&mut self, video_id: &str) -> anyhow::Result<MpvInput>;
-}
-```
+The `build_runtime_input` method forms the boundary to create an `MpvInput` representation that is compatible with MPV. Based on the selected `AudioTransportTarget`, this delegates to the appropriate transport.
 
 **Key Points**:
-- `build_mpv_input()` returns both URL and MPV arguments
-- `startup()`/`shutdown()` for sources that need initialization (e.g., ProxySource HTTP server)
-- All implementations share the same `AudioCache`
+- `LocalRelay` attempts to register a local HTTP session with `RelayRuntime` and falls back if staging failed.
+- On immediate cache miss, relay returns `StreamAndCache` — streams the URL to MPV while a tee-prefix download caches bytes in the background.
+- `Combined` and `DirectUrl` construct a direct or `FfmpegConcatSource` URL.
 
 ### ConcatSource (DEFAULT)
 
@@ -114,11 +101,25 @@ subfile,,start,<BYTE>,end,0,,:URL
 - concat+subfile uses BYTE offsets → byte-perfect junction
 - Verified via PCM MD5 comparison (identical hashes)
 
-### Passthrough vs Concat Decision
+### Relay-first with StreamAndCache
+
+The current default path for immediate playback is **relay-first with StreamAndCache**:
+
+1. **Relay setup**: `RelayRuntime::register_session()` creates a localhost HTTP session.
+2. **Cache hit**: if prefix is cached, relay serves it immediately via `StagedPrefix`.
+3. **Cache miss**: relay returns `StreamAndCache` — streams the upstream URL to MPV while a tee-prefix download writes the first ~200KB to disk in the background.
+4. **Tee-prefix promotion**: after the tee-prefix download completes, the cached bytes are promoted into `AudioCache` for reuse by future gapless/eager preparation.
+5. **URL reuse**: gapless/eager prefix downloads reuse the original resolved stream URL rather than invalidating and re-extracting after the prefix write.
+
+**Direct fallback** only occurs when relay setup fails entirely (not just prefix timeout). The coordinator swaps ownership to `TrackOwner::DirectFallback` and hands MPV a plain URL.
+
+### Legacy Passthrough vs Concat Decision
+
+> **Note**: The section below describes the older Combined/Direct transport paths. The default immediate path is now relay-first (see above).
 
 The Preparer chooses between:
 
-1. **Concat URL** (preferred): 
+1. **Concat URL** (preferred for staged/combined): 
    - Uses pre-downloaded audio prefix
    - Zero startup latency for MPV
    - Required for gapless transitions
@@ -198,53 +199,26 @@ ensure_prefix(video_id)
 └─────────────────────────────────┘
 ```
 
-### RangeSet (Kept for Future Proxy)
+### RelayRuntime
 
-**Location**: `rmpc/src/backends/youtube/audio/range_set.rs`
+**Location**: `rmpc/src/backends/youtube/media/relay_runtime.rs`
 
-Tracks downloaded byte ranges as sorted, non-overlapping `(start, end)` tuples. Currently kept for the future ProxySource implementation.
+A fully functional localhost HTTP daemon bridging the `AudioCache` and upstream. Replaces earlier design ideas around offline proxy streaming.
+- Manages a local `TCPListener` to serve stream chunks for `LocalRelay` modes.
+- Enforces an uninterrupted playback session via MPV playing from `localhost`.
+- Current behavior streams downstream immediately but still forwards one upstream range per player request.
+- Planned throttling-bypass hardening keeps the same localhost relay contract while splitting large relay -> YouTube requests into smaller chunks.
 
-```
-Example progression:
+## Legacy Components (REMOVED)
 
-Initial:     []
-add(0, 50):  [(0, 50)]
-add(100,150): [(0, 50), (100, 150)]
-add(50, 100): [(0, 150)]  ← Merged!
-```
-
-**Key Methods**:
-
-| Method | Description |
-|--------|-------------|
-| `add_range(start, end)` | Add range, auto-merge overlapping/adjacent |
-| `contains(offset)` | Binary search for O(log n) lookup |
-| `contiguous_from(offset)` | End of contiguous bytes from offset |
-
-## Legacy Components (DORMANT)
-
-### ProgressiveAudioFile (DORMANT - Future ProxySource)
-
-**Location**: `rmpc/src/backends/youtube/streaming_audio_file.rs`
-
-**Status**: DORMANT. Will be refactored for ProxySource implementation.
-
-A streaming audio file supporting concurrent read/write. Originally designed for the full-file progressive download approach. When ProxySource is implemented, this will be refactored to handle the HTTP server's file serving.
-
-### AudioFileManager (TO BE DELETED)
-
-**Location**: `rmpc/src/backends/youtube/audio_file_manager.rs`
-
-**Status**: TO BE DELETED. Replaced by simpler AudioCache.
-
-The original file lifecycle manager with LRU eviction. AudioCache provides the same functionality with a simpler API focused on prefix files only.
+Legacy components such as `RangeSet`, `ProgressiveAudioFile`, and `AudioFileManager` have been superseded by `RelayRuntime` and a simpler `AudioCache`.
 
 ## Data Flow
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌───────────────────────┐
-│ PlaybackSvc │────►│ MpvAudioSource   │────►│ build_mpv_input()     │
-│             │     │ (ConcatSource)   │     │                       │
+│ PlaybackSvc │────►│ Transport Router │────►│ build_runtime_input() │
+│             │     │ (Relay/Concat)   │     │                       │
 └─────────────┘     └──────────────────┘     └───────────┬───────────┘
                                                           │
                            ┌──────────────────────────────┘
@@ -283,7 +257,31 @@ The original file lifecycle manager with LRU eviction. AudioCache provides the s
                     └──────────────┘
 ```
 
+The diagram above shows the concat path. Relay uses the same preparation core and staged prefix, but hands MPV a localhost relay URL instead of a `lavf://concat` URL. After the planned throttling bypass is implemented, Relay will still stream bytes to MPV immediately; only the relay -> YouTube leg changes by chunking large upstream ranges.
+
 ## Key Design Decisions
+
+### Dedup<K,V>: Request Coalescing
+
+**Location**: `rmpc/src/shared/dedup.rs`
+
+All concurrent requests for the same resource are coalesced — only one actual download runs; all callers share its result.
+
+```
+Thread 1: ensure_prefix("abc123") ──┐
+Thread 2: ensure_prefix("abc123") ──┼──► Dedup<K,V> ──► ONE HTTP request
+Thread 3: ensure_prefix("abc123") ──┘         │
+                                      All 3 await same result
+```
+
+Uses `tokio::sync::OnceCell` (NOT `std::sync::OnceLock`) to avoid blocking the async runtime. Slots are cleaned up after all callers complete, preventing memory leaks.
+
+This is applied in:
+- `AudioCache::ensure_prefix` — prevents duplicate prefix downloads
+- `YouTubeMediaPreparer` — prevents duplicate prepare calls per track
+- `CachedExtractor` — prevents duplicate URL extractions
+
+---
 
 ### ADR-001: concat+subfile over EDL
 
@@ -353,23 +351,49 @@ audio: (
 ```
 rmpc/src/backends/youtube/audio/
 ├── mod.rs                  # Module exports
-├── cache.rs                # AudioCache
+├── cache.rs                # AudioCache (prefix download + LRU)
 ├── mpv_source.rs           # MpvAudioSource trait + MpvInput
+├── planner.rs              # AudioSourcePlanner (mode → transport)
+├── range_set.rs            # Byte range set (used by streaming_audio_file)
 ├── sources/
 │   ├── mod.rs
-│   ├── concat.rs           # ConcatSource (DEFAULT)
-│   └── proxy/              # ProxySource (FUTURE)
-│       ├── mod.rs
-│       └── server.rs
-└── range_set.rs            # Byte range tracking (for future proxy)
+│   ├── concat.rs           # FfmpegConcatSource (DEFAULT)
+│   └── direct.rs           # DirectSource
 
-# Legacy (to be removed/refactored)
-rmpc/src/backends/youtube/streaming_audio_file.rs   # DORMANT
-rmpc/src/backends/youtube/audio_file_manager.rs     # TO BE DELETED
+rmpc/src/backends/youtube/media/
+├── mod.rs                  # MediaPreparer trait + PreparedMedia
+├── preparer.rs             # YouTubeMediaPreparer (coalescing, tier, cancel)
+├── relay_runtime.rs        # RelayRuntime HTTP daemon
+
+rmpc/src/shared/
+├── dedup.rs                # Dedup<K,V> (tokio::OnceCell coalescing)
+└── play_queue/             # PlayQueue state machine (L1)
 ```
+
+## Relay Upstream Chunk Splitting
+
+The relay serves localhost correctly, but the upstream fetch strategy matters for YouTube large-range throttling.
+
+**Current behavior:**
+```text
+MPV requests bytes=0-50000000
+    -> relay serves staged prefix immediately if available
+    -> relay fetches upstream in smaller throttle-safe chunks
+    -> relay streams each chunk downstream as soon as it arrives
+    -> MPV still sees one normal localhost response
+```
+
+This keeps the existing localhost session runtime and changes only the upstream fetch strategy. Chunk splitting stays inside `RelayRuntime` rather than forcing a transport rewrite.
+
+### Queue Warm vs Playback Preparation
+
+These two behaviors are separate:
+
+- **Queue warm**: when a song is merely added to the queue, resolve the stream URL only. Do not stage prefix bytes. This gives later playback a head start without paying prefix download cost for every queued item.
+- **Playback preparation**: when a song is in the active playback window, use staged-prefix-capable preparation. This reduces silence for immediate play and auto-advance.
 
 ## See Also
 
 - [ADR-001](../adr/ADR-001-audio-streaming-architecture.md) - Authoritative architecture decision
+- [playback-flow.md](playback-flow.md) - **Canonical current playback behavior**
 - [playback-engine.md](playback-engine.md) - Overall playback architecture
-- [playback-flow.md](playback-flow.md) - End-to-end playback flow

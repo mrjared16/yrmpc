@@ -23,7 +23,7 @@ orchestrator::play_position_sync / play_position
       ├─ build prefetch window (current + lookahead)
       ├─ media_preparer.activate_playback_window(...)
       ├─ media_preparer.prepare(track_id, tier)
-      ├─ FfmpegConcatSource::build_from_prepared(...)
+      ├─ playback.build_runtime_input(track_id, prepared)
       └─ playback.playlist_append_input(...)
       │
       ▼
@@ -58,15 +58,22 @@ The implementation uses `MediaPreparer` (`rmpc/src/backends/youtube/media/mod.rs
 
 `PreparedMedia` variants:
 
-- `StagedPrefix { path, bytes, url, content_length }`
-- `Direct { url }`
-- `LocalFile { path }`
+- `StagedPrefix { path, bytes, url, content_length }` — cached prefix + remainder via concat
+- `StreamAndCache { url }` — relay streams URL while tee-prefix downloads cache (normal immediate cache-miss path)
+- `Direct { url }` — fallback only, when relay setup fails entirely
+- `LocalFile { path }` — local file playback
 
-`FfmpegConcatSource::build_from_prepared` (`rmpc/src/backends/youtube/audio/sources/concat.rs`) maps them to final MPV input:
+`PlaybackService::build_runtime_input` (`rmpc/src/backends/youtube/services/playback_service.rs`) maps them to final MPV input based on transport:
 
-- staged partial prefix -> `lavf://concat...|subfile...`
-- staged full prefix -> local file
-- direct -> direct URL
+- **LocalRelay Transport**: registers `PreparedMedia` with `RelayRuntime` for local HTTP streaming. `StreamAndCache` streams the URL while caching.
+- **Combined/Direct Transport**: uses `FfmpegConcatSource` to map:
+  - staged partial prefix -> `lavf://concat...|subfile...`
+  - staged full prefix -> local file
+  - direct -> direct URL (fallback only)
+
+### Coordinator Ownership During Startup
+
+During immediate-play startup, `PlaybackCoordinator` owns current-track identity. `PlayQueue.current_id` and transient MPV observations are advisory until playback is confirmed. Stale `TrackChanged(-1)` before playback start must be ignored and must not restore the previous track. This applies to both relay-first and direct-fallback startup paths.
 
 ## Queue and EOF Synchronization
 
@@ -86,8 +93,9 @@ The implementation uses `MediaPreparer` (`rmpc/src/backends/youtube/media/mod.rs
 | `rmpc/src/backends/youtube/media/mod.rs` | `MediaPreparer` + `PreparedMedia` contract |
 | `rmpc/src/backends/youtube/media/preparer.rs` | Coalescing, cancellation, fallback behavior |
 | `rmpc/src/backends/youtube/audio/planner.rs` | Delivery-mode planning |
-| `rmpc/src/backends/youtube/audio/sources/concat.rs` | Runtime MPV input builder |
-| `rmpc/src/backends/youtube/services/playback_service.rs` | MPV IPC and playlist commands |
+| `rmpc/src/backends/youtube/audio/sources/concat.rs` | FFmpeg subset input builder |
+| `rmpc/src/backends/youtube/services/playback_service.rs` | Routing boundary for MPV transport and control |
+| `rmpc/src/backends/youtube/media/relay_runtime.rs` | Local HTTP daemon relay server |
 
 ## Debugging Checklist
 
@@ -101,6 +109,6 @@ The implementation uses `MediaPreparer` (`rmpc/src/backends/youtube/media/mod.rs
 
 ## See Also
 
-- [../arch/playback-engine.md](../arch/playback-engine.md)
-- [../arch/playback-flow.md](../arch/playback-flow.md)
-- [../ARCHITECTURE-no-stutter-playback.md](../ARCHITECTURE-no-stutter-playback.md)
+- [../arch/playback-flow.md](../arch/playback-flow.md) — **canonical current playback behavior**
+- [../arch/audio-streaming.md](../arch/audio-streaming.md) — transport/cache deep dive
+- [../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md](../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) — relay architecture rationale

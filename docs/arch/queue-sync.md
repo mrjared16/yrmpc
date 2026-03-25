@@ -1,5 +1,7 @@
 # Queue State Synchronization Architecture
 
+> **Status: Proposal — never implemented.** This describes a versioned-queue-state design that was explored but not adopted. The current system uses delta-based reconciliation via `PlaybackCoordinator` and `reconcile_active_window_after_queue_mutation()`. See [playback-flow.md](../arch/playback-flow.md) for the actual current behavior.
+
 ## Problem Statement
 
 Current queue state management has critical issues:
@@ -113,23 +115,23 @@ if event.version > local_version {
 
 ### Implementation Plan
 
-1. **Add version to QueueService** (beads-xxxx)
+1. **Add version to QueueService** (br-xxxx)
    - Atomic u64 version counter
    - Increment on every mutation
 
-2. **Create QueueStateChanged event** (beads-xxxx)
+2. **Create QueueStateChanged event** (br-xxxx)
    - Replace "queue"/"playlist"/"options" events
    - Include version and diff
 
-3. **Update all handlers to use new event** (beads-xxxx)
+3. **Update all handlers to use new event** (br-xxxx)
    - play_intent.rs, queue.rs, options.rs
    - queue_events.rs for internal MPV sync
 
-4. **Update TUI QueueStore** (beads-xxxx)
+4. **Update TUI QueueStore** (br-xxxx)
    - Track local version
    - Apply diffs only if version > local
 
-5. **Add full sync mechanism** (beads-xxxx)
+5. **Add full sync mechanism** (br-xxxx)
    - GetQueueState command returns full state + version
    - Used on TUI startup and version mismatch
 

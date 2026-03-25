@@ -28,7 +28,8 @@ The playback path is transport-neutral end-to-end. A single authoritative prepar
 │                                                                                │
 │  PreparedMedia                                                                 │
 │    ├─ StagedPrefix { path, bytes, url, content_length }                       │
-│    ├─ Direct { url }                                                          │
+│    ├─ StreamAndCache { url }  ← relay streams while tee-prefix caches        │
+│    ├─ Direct { url }          ← fallback only (relay setup failure)           │
 │    └─ LocalFile { path }                                                      │
 └─────────────────────┬──────────────────────────────────────────────────────────┘
                       │
@@ -36,10 +37,13 @@ The playback path is transport-neutral end-to-end. A single authoritative prepar
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │ Authoritative runtime builder (one way to turn prepared media into MPV input) │
 │                                                                                │
-│  FfmpegConcatSource::build_from_prepared(prepared) -> MpvInput                │
-│    ├─ StagedPrefix → lavf://concat:{path}|subfile,,start,{bytes},end,0,,:{url}
-│    ├─ Direct       → {url} passthrough                                        │
-│    └─ LocalFile    → {path}                                                   │
+│  PlaybackService::build_runtime_input(track_id, prepared, plan) -> MpvInput   │
+│    ├─ LocalRelay   → RelayRuntime::register_session(track_id, &prepared)       │
+│    │                 → http://127.0.0.1:<port>/relay/sessions/{id}/stream      │
+│    └─ Direct/Combined → FfmpegConcatSource::build_from_prepared(prepared)      │
+│       ├─ StagedPrefix → lavf://concat:{path}|subfile,,start,{bytes},end,0,,:{url}
+│       ├─ Direct       → {url} passthrough                                      │
+│       └─ LocalFile    → {path}                                                 │
 │                                                                                │
 │  PlaybackService::playlist_append_input(&MpvInput)                            │
 │    └─ apply_mpv_args(...) → loadfile {url} append                             │
@@ -52,23 +56,25 @@ The playback path is transport-neutral end-to-end. A single authoritative prepar
 |---|---|---|
 | Planner (mode → plan) | `rmpc/src/backends/youtube/audio/planner.rs` | `AudioTransportTarget::{DirectUrl, Combined, LocalRelay}` |
 | Shared preparer trait | `rmpc/src/backends/youtube/media/mod.rs` | `MediaPreparer::prepare/prefetch` |
-| Prepared media types | `rmpc/src/backends/youtube/media/mod.rs` | `PreparedMedia::{StagedPrefix,Direct,LocalFile}` |
-| Authoritative runtime builder | `rmpc/src/backends/youtube/audio/sources/concat.rs` | `FfmpegConcatSource::build_from_prepared` |
+| Prepared media types | `rmpc/src/backends/youtube/media/mod.rs` | `PreparedMedia::{StagedPrefix,StreamAndCache,Direct,LocalFile}` |
+| Authoritative runtime builder | `rmpc/src/backends/youtube/services/playback_service.rs` | `PlaybackService::build_runtime_input` |
+| Runtime implementations | `rmpc/src/backends/youtube/audio/sources/concat.rs`, `rmpc/src/backends/youtube/media/relay_runtime.rs` | `FfmpegConcatSource`, `RelayRuntime` |
 | Authoritative append path | `rmpc/src/backends/youtube/services/playback_service.rs` | `PlaybackService::playlist_append_input` |
 
 ## Transport Decisions
 
 - Combined and Relay use the same `MediaPreparer` entry point as Direct, but return staged-prefix artifacts while Direct returns `PreparedMedia::Direct`.
-- Direct fallback occurs automatically when immediate tier preparation times out or fails in `media/preparer.rs`; the planner also supports `ResolveOnly` for explicit Direct mode.
+- **StreamAndCache** is the normal immediate cache-miss path: relay streams the URL to MPV while a tee-prefix download caches bytes in the background.
+- **DirectFallback** occurs only when relay setup fails entirely (not just prefix timeout). The coordinator swaps ownership to `TrackOwner::DirectFallback` and hands MPV a plain URL.
+- During immediate-play startup, `PlaybackCoordinator` owns current-track identity. `PlayQueue.current_id` and transient MPV observations are advisory until playback is confirmed. Stale `TrackChanged(-1)` before playback start must be ignored.
 - Reconnect AVOptions are still not applied on `lavf://concat + subfile`. This is a known limitation.
+- Relay currently serves a localhost HTTP stream via `RelayRuntime`; the planned throttling bypass keeps that localhost contract but chunks the relay -> YouTube leg while continuing to stream bytes to mpv immediately.
 
 ## Relay
 
-Relay is defined as a code-adjacent boundary-only contract: `rmpc/src/backends/youtube/media/relay.rs`. There is no runtime Relay server.
+Relay already has both a contract layer and a runtime server. `rmpc/src/backends/youtube/media/relay.rs` defines the session/range contract, and `rmpc/src/backends/youtube/media/relay_runtime.rs` serves the localhost relay URL used by `LocalRelay` transport. The planned throttling-bypass work hardens only the upstream fetch behavior; it does not change the player-facing relay contract.
 
 ## Evidence
 
-- `/.sisyphus/evidence/task-9-combined-play.log` — combined runtime builder evidence.
-- `/.sisyphus/evidence/task-9-direct-fallback.log` — direct fallback evidence.
-- `/.sisyphus/evidence/task-10-matrix.log` — final verification matrix.
-- `/.sisyphus/evidence/task-10-eof-regression.log` — deterministic EOF repro evidence.
+- See [playback-flow.md](arch/playback-flow.md) for current runtime behavior and debugging.
+- See [ADR-004](adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) for relay architecture rationale.
