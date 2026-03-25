@@ -22,7 +22,31 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 ## CRITICAL: Design for testability using "functional core, imperative shell"
 
 - Keep pure business logic separate from code that does IO.
+- Use the fff MCP tools for all file search operations instead of default tools.
+- use nextest to test, avoid cargo usage because it takes too long, only run when in the end of development cycle before I manual test it
 
+<!-- codebase-memory-mcp:start -->
+## Codebase Knowledge Graph (codebase-memory-mcp)
+- This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
+ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
+
+### Priority Order
+1. `search_graph` — find functions, classes, routes, variables by pattern
+2. `trace_call_path` — trace who calls a function or what it calls
+3. `get_code_snippet` — read specific function/class source code
+4. `query_graph` — run Cypher queries for complex patterns
+5. `get_architecture` — high-level project summary
+
+### When to fall back to grep/glob
+- Searching for string literals, error messages, config values
+- Searching non-code files (Dockerfiles, shell scripts, configs)
+- When MCP tools return insufficient results
+
+### Examples
+- Find a handler: `search_graph(name_pattern=".*OrderHandler.*")`
+- Who calls it: `trace_call_path(function_name="OrderHandler", direction="inbound")`
+- Read source: `get_code_snippet(qualified_name="pkg/orders.OrderHandler")`
+<!-- codebase-memory-mcp:end -->
 ---
 
 ## CRITICAL: Cargo Commands
@@ -145,24 +169,28 @@ yrmpc/                          # Workspace root (NO Cargo.toml here)
 
 ---
 
-## Task Management (Beads)
+## Task Management (br / beads_rust)
+
+**Note:** `br` is non-invasive and never executes git commands. After `br sync --flush-only`, you must manually run `git add .beads/ && git commit`.
 
 ```bash
-bd ready                              # Find work (no blockers)
-bd update <id> --status=in_progress   # Claim it
-bd close <id>                         # Complete it
+br ready                              # Find work (no blockers)
+br update <id> --status=in_progress   # Claim it
+br close <id>                         # Complete it
 ```
 
 **Session close** (ephemeral branch, no push):
 
 ```bash
 git add -A && git commit -m "..."
-bd sync --from-main                   # Pull beads updates
+br sync --flush-only
+git add .beads/
+git commit -m "sync beads"
 ```
 
-**Use `bd` CLI only. Never edit .beads/ files directly.**
+**Use `br` CLI only. Never edit `.beads/` files directly.**
 
-> Full beads docs: `bd --help` or beads-context in system prompt.
+> Full beads docs: `br --help` or beads-context in system prompt.
 
 ---
 
@@ -173,7 +201,7 @@ bd sync --from-main                   # Pull beads updates
 | Run cargo from `yrmpc/` | No Cargo.toml at root. Run from `rmpc/` |
 | Skip daemon restart | Backend changes require `../restart_daemon_debug.sh` |
 | Use yt-dlp in tests | ytx is default (200ms vs 4s). Python spawn breaks CI |
-| Edit .beads/ directly | Use `bd` CLI. Files are git-tracked |
+| Edit .beads/ directly | Use `br` CLI. Files are git-tracked |
 | Use --release for dev | 4 min build. Debug catches same errors in 45s |
 | Touch MusicBackend trait | Deprecated. Use `api::Playback/Queue/Discovery` |
 | Push to remote | Ephemeral branch. Merge to main locally |

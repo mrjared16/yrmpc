@@ -25,3 +25,7 @@ mise.toml
 # Ephemeral planning files (decisions distilled to docs/)
 backlog/
 docs/plans/
+
+# OpenCode / Sisyphus local runtime artifacts
+.opencode
+.sisyphus
