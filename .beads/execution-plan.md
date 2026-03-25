@@ -1,141 +1,58 @@
-# Execution Plan: Unified Streaming Audio File Architecture
+## Overview
 
-## Epic: yrmpc-26c - Unified Streaming Audio File Architecture
+- Epic: `yrmpc-197`
+- Title: `[EPIC] YtDlp extractor PO-token refactor`
+- Total beads: 4 child tasks
+- Estimated duration: 1 focused implementation pass
 
-**ADR**: `.sisyphus/adr/001-unified-streaming-audio-file.md`
-**Decisions**: `.beads/decisions.md`
+## Context summary
 
----
+- The standalone PO-token flow works.
+- The current app code already moved PO-token ownership into `YtDlpExtractor`, but the implementation is still too monolithic and still fails terminally when bgutil bootstrap fails.
+- The safe path is an internal refactor that preserves the extractor contract and decorator graph.
 
-## Phase 1: Core Infrastructure (No Dependencies)
+## Key constraints for execution
 
-| Bead | Title | Priority | Estimated |
-|------|-------|----------|-----------|
-| yrmpc-nrs | Implement RangeSet for byte tracking | P1 | 2-3 hours |
+- Do not change:
+  - `Extractor`
+  - `CachedExtractor`
+  - `FallbackExtractor`
+  - `YtxExtractor`
+  - `UrlResolver` composition
+- Keep PO-token logic extractor-owned.
+- Keep provider startup lazy.
+- Resolve JS runtime in order: env override -> `which bun` -> `which node`.
+- Compose provider base URL from host + port.
+- On provider bootstrap failure, warn and retry exactly once with cookies intact and `-f 251`.
+- Defer daemon/TUI warning transport; use log-first diagnostics seam now.
 
-**Acceptance Criteria**:
-- `RangeSet::new()`, `add_range()`, `contains()`, `contiguous_from()`
-- Unit tests for merge, overlap, gap detection
-- No external dependencies
+## Dependency graph
 
----
+- `yrmpc-197.1` -> `yrmpc-197.2` -> `yrmpc-197.3` -> `yrmpc-197.4`
 
-## Phase 2: Streaming File (Depends on Phase 1)
+## Execution batches
 
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-271 | Implement StreamingAudioFile struct | yrmpc-nrs | 4-6 hours |
+| Batch | Bead | Worker | Key context |
+| --- | --- | --- | --- |
+| A | `yrmpc-197.1` | orchestrator | Extract pure helper types and tests first without breaking behavior |
+| B | `yrmpc-197.2` | orchestrator | Replace current bgutil manager with provider/runtime manager; keep lazy semantics |
+| C | `yrmpc-197.3` | orchestrator | Add diagnostics seam and degraded retry path to `251` |
+| D | `yrmpc-197.4` | orchestrator | Run diagnostics/tests and update `po-token.md` only if operator-facing behavior changed |
 
-**Acceptance Criteria**:
-- Pre-allocate temp file to content-length
-- Background download with Range header
-- Separate read/write file handles
-- Condvar for blocking reads until bytes available
-- `path()`, `is_ready()`, `wait_for_bytes(offset, len)`
+## Acceptance criteria
 
----
+- `YtDlpExtractor` stays compatible with existing resolver/caching/fallback composition.
+- Internal helper boundaries exist for policy, arg building, runtime resolution, and provider management.
+- Provider URL is composed, not duplicated as a base URL constant.
+- Runtime resolution follows env -> bun -> node.
+- Provider bootstrap failure no longer aborts immediately; it warns and retries once with `251`.
+- Focused tests cover the new behavior.
 
-## Phase 3: Manager (Depends on Phase 2)
+## Risk mitigation
 
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-mas | Implement AudioFileManager | yrmpc-271 | 4-6 hours |
-
-**Acceptance Criteria**:
-- `get_or_create(video_id, stream_url, content_length)`
-- Track all active StreamingAudioFiles
-- Download pool (max 3 concurrent)
-- Basic LRU tracking (eviction in separate task)
-
----
-
-## Phase 4: Integration (Depends on Phase 3)
-
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-7vy | Integrate with PlaybackService | yrmpc-mas | 3-4 hours |
-
-**Acceptance Criteria**:
-- Replace `build_playback_url()` EDL logic with file path
-- MPV loads `audio_file.path()` directly
-- Verify: instant start, no 20ms glitch, seek works
-
----
-
-## Phase 5: Advanced Features (Parallel after Phase 4)
-
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-cis | Implement sliding prefetch window | yrmpc-7vy | 3-4 hours |
-| yrmpc-x66 | Implement T-30s prefetch trigger | yrmpc-7vy | 2-3 hours |
-| yrmpc-vpc | Implement LRU eviction policy | yrmpc-mas | 2-3 hours |
-
----
-
-## Phase 6: Edge Cases (Parallel after Phase 4)
-
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-6gi | Handle seek to undownloaded region | yrmpc-7vy | 3-4 hours |
-| yrmpc-4mn | Handle URL expiration and re-resolve | yrmpc-7vy | 2-3 hours |
-
----
-
-## Phase 7: Cleanup (After All Above)
-
-| Bead | Title | Blocked By | Estimated |
-|------|-------|------------|-----------|
-| yrmpc-d9h | Remove legacy AudioCache and EDL code | yrmpc-7vy | 1-2 hours |
-
----
-
-## Dependency Graph
-
-```
-yrmpc-nrs (RangeSet)
-    │
-    ▼
-yrmpc-271 (StreamingAudioFile)
-    │
-    ▼
-yrmpc-mas (AudioFileManager) ──────┬──────────────────┐
-    │                              │                  │
-    ▼                              ▼                  ▼
-yrmpc-7vy (Integration)      yrmpc-vpc (LRU)    (other managers)
-    │
-    ├──────────┬──────────┬──────────┬──────────┐
-    ▼          ▼          ▼          ▼          ▼
-yrmpc-cis  yrmpc-x66  yrmpc-6gi  yrmpc-4mn  yrmpc-d9h
-(prefetch) (T-30s)    (seek)     (URL exp)  (cleanup)
-```
-
----
-
-## Ready to Start
-
-```
-bd ready → yrmpc-nrs (RangeSet for byte tracking)
-```
-
----
-
-## Total Estimated Effort
-
-| Phase | Hours |
-|-------|-------|
-| Phase 1 (RangeSet) | 2-3 |
-| Phase 2 (StreamingAudioFile) | 4-6 |
-| Phase 3 (Manager) | 4-6 |
-| Phase 4 (Integration) | 3-4 |
-| Phase 5 (Advanced) | 7-10 |
-| Phase 6 (Edge Cases) | 5-7 |
-| Phase 7 (Cleanup) | 1-2 |
-| **Total** | **26-38 hours** |
-
----
-
-## Related Issues
-
-| Bead | Title | Status |
-|------|-------|--------|
-| yrmpc-ofg | 1-item queue repeats after EOF despite RepeatMode::Off | Open (separate bug) |
+| Risk | Strategy |
+| --- | --- |
+| Refactor breaks extractor contract indirectly | Keep public signatures unchanged and verify with diagnostics/tests |
+| Same-file refactor becomes tangled | Land behavior in small dependency-ordered beads |
+| Warning seam grows into protocol work | Keep default implementation log-only |
+| Docs drift from behavior | Update `po-token.md` only if user-facing behavior truly changed |
