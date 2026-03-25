@@ -248,25 +248,17 @@ impl AudioCache {
 }
 ```
 
-### Decorator Pattern
+### MediaPreparer Coalescing Boundary
 
-```rust
-/// Wrap ANY MediaPreparer to add coalescing
-pub struct DedupMediaPreparer<P: MediaPreparer> {
-    inner: P,
-    dedup: Dedup<String, Result<PreparedMedia, PrepareError>>,
-}
+`DedupMediaPreparer` was proposed during design, but not adopted in production.
+The implemented boundary is:
 
-#[async_trait]
-impl<P: MediaPreparer> MediaPreparer for DedupMediaPreparer<P> {
-    async fn prepare(&self, track_id: &str, tier: PreloadTier) -> Result<PreparedMedia> {
-        self.dedup.get_or_init(
-            track_id.to_string(),
-            || self.inner.prepare(track_id, tier)
-        ).await
-    }
-}
-```
+- `YouTubeMediaPreparer` owns in-flight coalescing for preparation jobs
+- `AudioCache` uses `Dedup<K, V>` for prefix download coalescing
+- `CachedExtractor` uses `Dedup<K, V>` for URL extraction coalescing
+
+This keeps coalescing close to real execution paths instead of adding a generic
+decorator layer that is easy to leave unwired.
 
 ---
 
@@ -290,7 +282,7 @@ impl<P: MediaPreparer> MediaPreparer for DedupMediaPreparer<P> {
 | 1 | Create `shared/dedup.rs` | 1h |
 | 2 | Add to `AudioCache::ensure_prefix` | 1h |
 | 3 | Migrate `ImageCache` | 2h |
-| 4 | Create `DedupMediaPreparer` decorator | 1h |
+| 4 | Finalize MediaPreparer in-flight coalescing path | 1h |
 | 5 | Add CI check + docs | 1h |
 
 **Total**: ~6 hours
@@ -301,7 +293,7 @@ impl<P: MediaPreparer> MediaPreparer for DedupMediaPreparer<P> {
 
 ### Positive
 - Single pattern for all coalescing
-- Decorator-friendly (wraps anything)
+- Coalescing lives in active runtime paths
 - Testable in isolation
 - Prevents future race conditions
 

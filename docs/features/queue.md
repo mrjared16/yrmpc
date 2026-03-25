@@ -129,18 +129,24 @@ The UI reflects the state of `PlayQueue` immediately. It does not wait for MPV t
 
 | File | Purpose |
 |------|---------|
-| `rmpc/src/shared/play_queue.rs` | **Layer 1**: State Machine |
-| `rmpc/src/backends/youtube/bridge/` | **Layer 2**: Handlers |
+| `rmpc/src/shared/play_queue/mod.rs` | **Layer 1**: State machine — order, shuffle, repeat, events |
+| `rmpc/src/backends/youtube/server/orchestrator.rs` | **Layer 2**: Playback bridge — MPV playlist sync, EOF handling |
+| `rmpc/src/backends/youtube/server/handlers/play_intent.rs` | **Layer 2**: PlayIntent dispatch and preload scheduling |
 | `rmpc/src/ui/panes/queue_pane.rs` | UI Implementation |
 
 ## Debugging Checklist
 
 | Symptom | Likely Cause | File |
 |---------|--------------|------|
-| UI shows items but no audio | Bridge didn't receive/handle event | `bridge/handlers.rs` |
-| "Ghost" tracks play | MPV playlist out of sync with PlayQueue | `bridge/mpv.rs` |
-| Shuffle resets on track change | Repeat mode logic error | `play_queue.rs` |
-| Items vanish on shuffle | `original_order` not preserved | `play_queue.rs` |
+| UI shows items but no audio | Bridge didn't receive/handle event | `server/handlers/queue_events.rs` |
+| "Ghost" tracks play | MPV playlist out of sync with PlayQueue | `server/orchestrator.rs` |
+| Shuffle resets on track change | Repeat mode logic error | `shared/play_queue/mod.rs` |
+| Items vanish on shuffle | `original_order` not preserved | `shared/play_queue/mod.rs` |
+| Queue add clobbers in-flight immediate play | Stale `PlayQueue.current_id` used as anchor | `server/handlers/queue_events.rs` (see coordinator ownership) |
+
+### Coordinator Ownership
+
+During immediate-play startup, `PlaybackCoordinator` owns current-track identity. Queue mutations use delta-based reconciliation — only new tracks are prepared, unchanged future entries are preserved. `PlayQueue.current_id` is advisory during in-flight immediate play; the coordinator's pending current track wins until playback confirmation.
 
 ## See Also
 

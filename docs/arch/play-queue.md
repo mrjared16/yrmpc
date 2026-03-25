@@ -104,7 +104,8 @@ The Bridge listens to `QueueEvent`s emitted by Layer 1 and executes the necessar
 - **Trigger**: `ItemsAdded` or proximity to current track.
 - **Action**: Resolves YouTube video IDs to audio URLs.
 - **Prefetch**: Downloads audio chunks to disk (~/.cache/rmpc/audio/).
-- **EDL Composition**: Creates Hybrid EDL URLs (`edl://cache,0,10;stream,10,`) allowing seamless transition from cached disk bytes to network stream.
+  - **Staging**: Downloads the first ~200KB of audio (prefix) to disk as `~/.cache/rmpc/audio/{id}.m4a`.
+  - **MPV Input**: `PlaybackService::build_runtime_input` routes to `FfmpegConcatSource` which builds: `lavf://concat:{prefix_path}|subfile,,start,{bytes},end,0,,:{url}` (byte-perfect, see ADR-001).
 
 #### 2. MPV Controller
 - **Trigger**: `OrderChanged`, `CurrentChanged`.
@@ -124,7 +125,14 @@ To prevent desyncs (e.g., fast user input vs slow MPV), the system uses **Epochs
 2. Events carry this epoch.
 3. Async handlers check if the event epoch matches the current state epoch. Stale events are discarded.
 
+### Coordinator Ownership (2026-03)
+
+During immediate-play startup, `PlaybackCoordinator` owns current-track identity. `PlayQueue.current_id` is advisory until playback is confirmed. Stale `TrackChanged(-1)` before playback start must be ignored.
+
+Queue mutations use **delta-based reconciliation**: when tracks are added during active playback, only new tracks beyond the unchanged prefix are prepared and appended to MPV. Unchanged future entries are preserved.
+
 ## Key Invariants
 1. **"What you see is what you hear"**: The TUI displays `play_order`, and MPV plays `play_order`.
 2. **ID Consistency**: IDs are constant; indices are ephemeral.
 3. **Optimistic UI**: Layer 1 updates instantly; Layer 2 catches up.
+4. **Coordinator authority**: During startup, coordinator state overrides `PlayQueue.current_id`.
