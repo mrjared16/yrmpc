@@ -15,30 +15,30 @@ pkill -f "rmpcd" 2>/dev/null || true
 # Check if MPV has existing playlist
 MPV_NEEDS_RESTART=false
 if [ -S "$MPV_SOCKET_PATH" ]; then
-    echo "=== Checking MPV playlist state ==="
+	echo "=== Checking MPV playlist state ==="
 
-    # Query MPV's playlist-count using socat
-    PLAYLIST_COUNT=$(echo '{"command": ["get_property", "playlist-count"]}' | \
-        socat - "$MPV_SOCKET_PATH" 2>/dev/null | \
-        grep -o '"data":[0-9]*' | \
-        grep -o '[0-9]*' || echo "0")
+	# Query MPV's playlist-count using socat
+	PLAYLIST_COUNT=$(echo '{"command": ["get_property", "playlist-count"]}' |
+		socat - "$MPV_SOCKET_PATH" 2>/dev/null |
+		grep -o '"data":[0-9]*' |
+		grep -o '[0-9]*' || echo "0")
 
-    if [ "$PLAYLIST_COUNT" -gt 0 ] 2>/dev/null; then
-        echo "⚠ MPV has $PLAYLIST_COUNT tracks in playlist - will restart for clean state"
-        MPV_NEEDS_RESTART=true
-    else
-        echo "✓ MPV playlist is empty - can reuse existing process"
-    fi
+	if [ "$PLAYLIST_COUNT" -gt 0 ] 2>/dev/null; then
+		echo "⚠ MPV has $PLAYLIST_COUNT tracks in playlist - will restart for clean state"
+		MPV_NEEDS_RESTART=true
+	else
+		echo "✓ MPV playlist is empty - can reuse existing process"
+	fi
 else
-    echo "No MPV socket found - will spawn new process"
+	echo "No MPV socket found - will spawn new process"
 fi
 
 # Kill MPV if it needs restart
 if [ "$MPV_NEEDS_RESTART" = true ]; then
-    echo "=== Killing MPV for clean restart ==="
-    pkill -f "mpv.*yrmpc-yt.mpv.sock" 2>/dev/null || true
-    sleep 1
-    rm -f "$MPV_SOCKET_PATH"
+	echo "=== Killing MPV for clean restart ==="
+	pkill -f "mpv.*yrmpc-yt.mpv.sock" 2>/dev/null || true
+	sleep 1
+	rm -f "$MPV_SOCKET_PATH"
 fi
 
 # Remove stale daemon socket
@@ -50,6 +50,8 @@ echo "Press Ctrl+C to stop"
 echo ""
 
 # Run with backtrace and log env, output to both terminal and log file
-# Use ytx for faster stream extraction (~200ms vs ~3-4s with yt-dlp)
-# RUST_LOG=trace enables diagnostic logs for debugging images and EOF
-RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | tee "$LOG_FILE"
+# Using ytdlp extractor for relay-focused debug testing (ytx is the fast dev default via restart_daemon.sh)
+# Relay audio delivery is now the default mode; no --audio-delivery flag is needed
+# RUST_LOG=debug enables diagnostic logs for debugging images and EOF
+RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytdlp 2>&1 | loglit "video_id=\S+" "track=\S" >"$LOG_FILE"
+# RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit > "$LOG_FILE"

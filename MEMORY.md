@@ -66,7 +66,7 @@ AudioCache (HTTP Range 10s) → ytx --bulk → edl://cache.opus,0,10;https://yt,
 ## Critical Rules
 
 ### NEVER
-- Edit .beads/ files directly (use `bd` CLI only)
+- Edit .beads/ files directly (use `br` CLI only)
 - Commit plan files to git (distill decisions to docs/, gitignore backlog/ and docs/plans/)
 - Use `legacy_panes: (queue: false, search: false)` format (deprecated)
 - Test component contracts without E2E flow verification
@@ -75,7 +75,7 @@ AudioCache (HTTP Range 10s) → ytx --bulk → edl://cache.opus,0,10;https://yt,
 - Download entire playlists (stream only)
 
 ### ALWAYS
-- Use `bd ready` and `bd update <id> --status=in_progress`
+- Use `br ready` and `br update <id> --status=in_progress`
 - Write E2E tests verifying API → Domain → UI flow
 - Test with actual emojis: `assert_eq!(icon, "🎤")` not `" "`
 - Verify config RON schema matches Rust struct
@@ -327,4 +327,4 @@ queue.play(PlayIntent::Context {
 
 ## Documentation
 
-`CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | Beads CLI (`bd`) - Task management | `docs/arch/*.md` - Architectural decisions
+`CLAUDE.md` - LLM guidelines | `docs/ARCHITECTURE.md` - System design | `docs/VISION.md` - Project goals | `br` CLI (beads_rust) - Task management | `docs/arch/*.md` - Architectural decisions
