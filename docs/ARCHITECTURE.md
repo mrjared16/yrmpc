@@ -53,7 +53,7 @@ Refactored (Dec 2025) to enforce Interface Segregation and Backend Agnosticism:
 
 1. **Granular Traits**: `MusicBackend` is split into `api::Playback`, `api::Queue`, `api::Discovery`.
 2. **Unified Implementation**: All backends reside in `src/backends/<name>` (e.g., `youtube`, `mpd`).
-3. **Playback Engine**: Current YouTube backend controls an external MPV process over JSON IPC; see [playback-engine.md](arch/playback-engine.md) (engine design) and [backends/youtube/](backends/youtube/README.md) (wiring details).
+3. **Playback Engine**: Current YouTube backend controls an external MPV process over JSON IPC; see [playback-flow.md](arch/playback-flow.md) for the canonical current runtime behavior, [audio-streaming.md](arch/audio-streaming.md) for transport/cache details, and [backends/youtube/](backends/youtube/README.md) for backend wiring details.
 4. **Layer Separation**:
    - `src/domain/`: Defines *what* data is (MediaItem, ContentDetails).
    - `src/backends/api/`: Defines *how* to fetch data.
@@ -80,7 +80,9 @@ Key types:
 - `PreloadTier`: Immediate > Gapless > Eager > Background
 - `RequestId`: u64 counter for dedup/cancel
 
-Playback URL construction is centralized at runtime in `FfmpegConcatSource::build_from_prepared` (`rmpc/src/backends/youtube/audio/sources/concat.rs`).
+Playback URL construction is centralized at runtime in `PlaybackService::build_runtime_input` (`rmpc/src/backends/youtube/services/playback_service.rs`), which branches to either `RelayRuntime::register_session` (for `LocalRelay` transport) or `FfmpegConcatSource::build_from_prepared` (for `Combined`/`Direct` transport).
+
+> **Breaking internal contract (2026-03 playback refactor):** during immediate playback startup, `PlaybackCoordinator` owns current-track identity. `PlayQueue.current_id` and transient MPV observations are advisory until playback is confirmed. Stale `TrackChanged(-1)` before playback start must be ignored and must not restore the previous track.
 
 ## Where to Look
 
@@ -89,8 +91,8 @@ Playback URL construction is centralized at runtime in `FfmpegConcatSource::buil
 | Task | Read These |
 |------|------------|
 | Fix search/TopResult parsing | [features/search.md](features/search.md), [arch/youtube-integration.md](arch/youtube-integration.md) |
-| Fix playback/MPV issues | [features/playback.md](features/playback.md), [arch/playback-engine.md](arch/playback-engine.md) |
-| Fix streaming/buffering | [arch/audio-streaming.md](arch/audio-streaming.md) |
+| Fix playback/MPV issues | [arch/playback-flow.md](arch/playback-flow.md), [adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md](adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) |
+| Fix streaming/buffering | [arch/audio-streaming.md](arch/audio-streaming.md), [arch/playback-flow.md](arch/playback-flow.md) |
 | Fix navigation/back button | [arch/ui-navigation.md](arch/ui-navigation.md) |
 | Add new pane | [features/navigation.md](features/navigation.md) |
 | Fix queue operations | [features/queue.md](features/queue.md) |
@@ -107,7 +109,7 @@ Playback URL construction is centralized at runtime in `FfmpegConcatSource::buil
 | Symptom | Likely Cause | Read |
 |---------|--------------|------|
 | Empty search results | ytmapi parsing | [arch/youtube-integration.md](arch/youtube-integration.md) |
-| Playback doesn't start | URL extraction | [arch/playback-engine.md](arch/playback-engine.md) |
+| Playback doesn't start | in-flight ownership, relay startup, or staging issue | [arch/playback-flow.md](arch/playback-flow.md) |
 | Wrong item displayed | Adapter conversion | [arch/youtube-integration.md](arch/youtube-integration.md) |
 | Navigation stuck | Stack corruption | [arch/ui-navigation.md](arch/ui-navigation.md) |
 | Action not handled | Missing handler | [arch/action-system.md](arch/action-system.md) |
@@ -125,7 +127,9 @@ Playback URL construction is centralized at runtime in `FfmpegConcatSource::buil
 - [arch/section-model.md](arch/section-model.md) - SectionList, UI vs domain
 - [arch/persistence.md](arch/persistence.md) - Config, serialization, state storage
 - [arch/background-tasks.md](arch/background-tasks.md) - Scheduler, prefetch, threading
-- [arch/audio-streaming.md](arch/audio-streaming.md) - Progressive streaming, caching (ADR-001)
+- [arch/playback-flow.md](arch/playback-flow.md) - **Canonical current playback behavior**
+- [arch/audio-streaming.md](arch/audio-streaming.md) - AudioCache, concat, relay transport (ADR-001)
+- [arch/play-queue.md](arch/play-queue.md) - PlayQueue state machine (L1) and Bridge (L2)
 
 ### Zone 2: Capabilities (Backend Contracts)
 - [capabilities/README.md](capabilities/README.md) - **Start here** - Required vs optional capabilities
@@ -148,10 +152,16 @@ Playback URL construction is centralized at runtime in `FfmpegConcatSource::buil
 - [backends/reference/README.md](backends/reference/README.md) - **Contributor guide** - How to add a backend
 - [backends/youtube/README.md](backends/youtube/README.md) - YouTube Music implementation
 - [arch/youtube-integration.md](arch/youtube-integration.md) - ytmapi adapter, quirks
-- [arch/playback-engine.md](arch/playback-engine.md) - MPV, audio cache, extraction
+- [arch/playback-engine.md](arch/playback-engine.md) - Older engine background; use `playback-flow.md` for current runtime behavior
 
 ### Reference
 - [VISION.md](VISION.md) - Project goals
+
+### Architecture Decision Records
+- [ADR-001](adr/ADR-001-audio-streaming-architecture.md) - Audio streaming: `concat+subfile` over EDL
+- [ADR-002](adr/ADR-002-playintent-architecture-2026-01-15.md) - PlayIntent command architecture
+- [ADR-003](adr/ADR-003-media-preparer-architecture.md) - MediaPreparer architecture (**summary**; full detail in `adr/ADR-003-part*.md`)
+- [ADR-004](adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) - Immediate relay cleanup + coordinator ownership (**implemented**)
 
 ## Layer Boundaries
 

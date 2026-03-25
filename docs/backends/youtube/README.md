@@ -7,26 +7,33 @@
 
 The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` library. It uses a daemon-client architecture for reliable streaming.
 
+> **Current canonical playback docs:**
+> - [../../arch/playback-flow.md](../../arch/playback-flow.md) — current runtime behavior
+> - [../../arch/audio-streaming.md](../../arch/audio-streaming.md) — transport/cache deep dive
+> - [../../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md](../../adr/ADR-004-immediate-relay-path-cleanup-2026-03-24.md) — architectural rationale
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        TUI (Client)                             │
-│  Sends requests via IPC (JSON over Unix socket/stdio)          │
+│  Sends requests via IPC (JSON over Unix socket/stdio)           │
 └─────────────────────────────┬───────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                      YouTube Daemon                             │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │ Server      │  │ URL Resolver│  │ MPV Player  │             │
-│  │ (handlers)  │  │ (ytx/yt-dlp)│  │ (playback)  │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-└─────────────────────────────┬───────────────────────────────────┘
+│  ┌──────────────┐  ┌────────────────┐  ┌────────────────────┐  │
+│  │ Server       │  │ MediaPreparer  │  │ MPV (playback)     │  │
+│  │ (handlers)   │  │ + AudioCache   │  │                    │  │
+│  └──────────────┘  └────────────────┘  └────────────────────┘  │
+│         │                │                      │               │
+│         └────────────────┴──► RelayRuntime ─────┘              │
+└─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ytmapi-yrmpc                                 │
+│                    ytmapi-yrmpc                                  │
 │  Rust bindings for YouTube Music internal API                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -38,14 +45,16 @@ The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` libra
 | Client | `backends/youtube/client.rs` | IPC with daemon |
 | Server | `backends/youtube/server/` | Request handlers |
 | Play Intent Handler | `backends/youtube/server/handlers/play_intent.rs` | Handles PlayIntent commands (ADR-002) |
-| Orchestrator | `backends/youtube/server/orchestrator.rs` | EOF/track-change state machine |
+| Orchestrator | `backends/youtube/server/orchestrator.rs` | Playback bridge, EOF/track-change FSM |
 | Adapter | `backends/youtube/adapter.rs` | Type conversions |
-| URL Resolver | `backends/youtube/url_resolver.rs` | Video ID → stream URL |
-| Playback Service | `backends/youtube/services/playback_service.rs` | MPV control |
+| URL Resolver | `backends/youtube/url_resolver.rs` | Video ID → stream URL (ytx/yt-dlp) |
+| MediaPreparer | `backends/youtube/media/preparer.rs` | Coalesced prep: URL resolve + prefix + tier |
+| AudioCache | `backends/youtube/audio/cache.rs` | 200KB prefix download/LRU cache |
+| RelayRuntime | `backends/youtube/media/relay_runtime.rs` | Local HTTP daemon for LocalRelay transport |
+| ConcatSource | `backends/youtube/audio/sources/concat.rs` | Builds `lavf://concat` MPV input |
+| Playback Service | `backends/youtube/services/playback_service.rs` | MPV playlist control + transport boundary |
 | Queue Service | `backends/youtube/services/queue_service.rs` | Queue state |
 | Internal Events | `backends/youtube/services/internal_event.rs` | Typed MPV event routing |
-| ProgressiveAudioFile | `backends/youtube/streaming_audio_file.rs` | Progressive download with range requests |
-| AudioFileManager | `backends/youtube/audio_file_manager.rs` | File lifecycle and cache management |
 
 ## Resilience Architecture (2024-01)
 
@@ -99,9 +108,17 @@ See [auth.md](./auth.md) for details on:
 
 ## Stream Resolution
 
-Extractor options (ytx vs yt-dlp), URL caching, and prefetch strategy are handled by the URL Resolver component. Audio streaming uses `ProgressiveAudioFile` for progressive download with `AudioFileManager` coordinating file lifecycle and cache eviction.
+Extractor options (ytx vs yt-dlp) are handled by the URL Resolver. Audio streaming uses `AudioCache` for 200KB prefix download + LRU eviction, `FfmpegConcatSource`/`RelayRuntime` for byte-perfect playback via MPV, and `MediaPreparer` for tier-based coalesced preparation.
 
-See [arch/audio-streaming.md](../../arch/audio-streaming.md) for detailed streaming architecture.
+### Current playback contract (2026-03)
+
+- **Immediate play is relay-first.** A cache miss normally returns `PreparedMedia::StreamAndCache`, so playback begins through the local relay while the prefix is tee-written into cache.
+- **Direct URL is fallback only.** Direct playback is used only if relay setup fails as a whole for the current track.
+- **Coordinator owns in-flight current-track identity.** During immediate startup, `PlaybackCoordinator` is authoritative; `PlayQueue.current_id` and transient MPV `TrackChanged(-1)` observations are advisory until playback is confirmed.
+- **Queue mutation is delta-based.** Active-playback reconciliation preserves unchanged future MPV tail entries and only prepares/appends newly exposed tracks.
+- **Prefix cache promotion is reusable.** Tee-completed relay prefixes are promoted into `AudioCache`, and gapless/eager prefix downloads reuse the original resolved stream URL instead of forcing a second extraction.
+
+See [arch/audio-streaming.md](../../arch/audio-streaming.md) for the full streaming architecture.
 
 ## YouTube-Specific Quirks
 
@@ -125,4 +142,4 @@ youtube: (
 
 - [Capability System](../../capabilities/README.md) - What we implement
 - [Contributor Guide](../reference/README.md) - How backends work
-- [Playback Feature](../../features/playback.md) - User flow
+- [Playback Flow](../../arch/playback-flow.md) - Current runtime behavior
