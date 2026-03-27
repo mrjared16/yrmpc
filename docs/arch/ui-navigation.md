@@ -121,10 +121,11 @@ trait NavigatorPane {
 2. SearchPane returns PaneAction::NavigateTo(EntityRef::Artist(id))
         │
         ▼
-3. Navigator::handle_pane_action() matches NavigateTo
-   └─► Creates ArtistDetailPane
-   └─► Pushes onto pane_stack
-   └─► ArtistDetailPane becomes active
+3. Navigator::request_navigation() owns the async detail fetch
+   └─► switches to the destination detail pane immediately
+   └─► renders a loading placeholder while detail data is pending
+   └─► ignores stale detail responses after cancel/back navigation
+   └─► pushes accepted detail content into the navigator-owned detail pane
         │
         ▼
 4. User presses Backspace
@@ -136,6 +137,20 @@ trait NavigatorPane {
 6. Navigator pops pane_stack
    └─► Previous pane (SearchPane) becomes active
 ```
+
+## Redraw Ownership Contract
+
+In Navigator mode, **Navigator owns synchronous key-driven redraw scheduling**.
+
+- `NavigatorPane::handle_key()` should return semantic `PaneAction`s.
+- Pane-local synchronous state changes should:
+  - mutate local pane state,
+  - consume the key,
+  - return `PaneAction::Handled`.
+- `Navigator::handle_key()` schedules `ctx.render()` when a consumed key returns `PaneAction::Handled`.
+- Navigator-owned panes should not call `ctx.render()` directly for normal synchronous key handling.
+
+This prevents panes from silently mutating selection/filter state without producing an immediate redraw.
 
 ## Interactive Components
 
