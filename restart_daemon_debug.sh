@@ -53,5 +53,5 @@ echo ""
 # Using ytdlp extractor for relay-focused debug testing (ytx is the fast dev default via restart_daemon.sh)
 # Relay audio delivery is now the default mode; no --audio-delivery flag is needed
 # RUST_LOG=debug enables diagnostic logs for debugging images and EOF
-RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytdlp 2>&1 | loglit "video_id=\S+" "track=\S" >"$LOG_FILE"
+RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit "video_id=\S+" "track=\S" >"$LOG_FILE"
 # RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit > "$LOG_FILE"
