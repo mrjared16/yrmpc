@@ -13,7 +13,9 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 ./rmpc/target/debug/rmpc --config ./config/rmpc.ron  # Start TUI
 ```
 
-**Verify changes**: `cargo fmt && cargo clippy && cargo nextest run`
+**Verify changes**: `cargo clippy && cargo nextest run`
+
+> **Formatting rule**: Never run `cargo fmt` in this repository unless the user explicitly asks for it.
 
 > **Note**: Only use `--release` after confirming all changes work. Release build takes ~4 min.
 
@@ -24,6 +26,7 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 - Keep pure business logic separate from code that does IO.
 - Use the fff MCP tools for all file search operations instead of default tools.
 - use nextest to test, avoid cargo usage because it takes too long, only run when in the end of development cycle before I manual test it
+- never run `cargo fmt` unless the user explicitly requests formatting
 
 <!-- codebase-memory-mcp:start -->
 ## Codebase Knowledge Graph (codebase-memory-mcp)
@@ -199,6 +202,7 @@ git commit -m "sync beads"
 | Don't | Why |
 |-------|-----|
 | Run cargo from `yrmpc/` | No Cargo.toml at root. Run from `rmpc/` |
+| Run `cargo fmt` proactively | User does not want repo-wide formatting churn; only run it when explicitly requested |
 | Skip daemon restart | Backend changes require `../restart_daemon_debug.sh` |
 | Use yt-dlp in tests | ytx is default (200ms vs 4s). Python spawn breaks CI |
 | Edit .beads/ directly | Use `br` CLI. Files are git-tracked |
