@@ -35,7 +35,7 @@ PlaybackService.playlist_append_input(&MpvInput)
 MPV playlist play-index 0
         │
         ▼
-Playback started hook -> coordinator activates next-three background prefix work
+Playback started hook -> coordinator activates bounded background warm + prefix work
 ```
 
 ## Authoritative Runtime Path
@@ -59,14 +59,14 @@ On immediate play:
 3. prepare only the current track with `PreloadTier::Immediate`
 4. build the runtime input, allowing explicit relay-to-direct fallback only for this current track
 5. append the single current-track input and start MPV playback
-6. after playback actually starts, the orchestrator emits one-shot `PlaybackStarted` from the active MPV playback-confirmation edge and kicks the prefix-window worker
-7. the worker activates the coordinator-owned next-three window, claims one prefix job at a time, prepares it in background, then reports `finish_prefix_job` / `fail_prefix_job` back to the coordinator
+6. after playback actually starts, the orchestrator emits one-shot `PlaybackStarted` from the active MPV playback-confirmation edge and kicks the background-prep worker
+7. the worker activates the coordinator-owned warm/prefix windows, warms the approved near-term tracks, claims one prefix job at a time, prepares it in background, then reports `finish_prefix_job` / `fail_prefix_job` back to the coordinator
 
 While immediate prepare is still in flight, stale MPV `TrackChanged` noise from tearing down the old playlist is ignored for coordinator resync purposes. That now applies to both relay-first startup and the direct-fallback branch, preventing a `stop/clear -> TrackChanged(-1)` race from restoring the previous song as the coordinator's current track before the new immediate play actually starts.
 
-Queue-add handling updates the coordinator horizon and warms background extraction candidates, but no longer performs ad hoc immediate/gapless/eager window activation.
+Queue-add handling updates the coordinator horizon only. It no longer warms added tracks directly or performs ad hoc immediate/gapless/eager scheduling.
 
-Active-playback queue reconciliation is now delta-based: it keeps any unchanged future tail entries already present in MPV and prepares/appends only newly exposed tracks instead of rebuilding the full future window on every append/mutation.
+Active-playback queue reconciliation now trims MPV back to the current track, refreshes coordinator policy state, and defers any future-track work to the post-confirm background worker instead of synchronously preparing newly exposed tail tracks.
 
 ### 3) Prepared media variants
 
@@ -117,9 +117,9 @@ This preserves click-to-audio responsiveness while background next-three work ca
 - supports request cancellation (`CacheRequest::Cancel`)
 - prunes stale work via `activate_playback_window`
 
-The coordinator now owns the resolved horizon and next-three prefix window. The preparer still handles background jobs, but queue ownership and current-track protection are centralized in the coordinator, and production wiring now drives `claim_next_prefix_job()` / `finish_prefix_job()` through the prefix-window worker.
+The coordinator now owns the resolved horizon plus explicit warm and prefix windows. The preparer still handles background jobs, but queue ownership and current-track protection are centralized in the coordinator, and production wiring now drives `warm_window()`, `claim_next_prefix_job()`, and `finish_prefix_job()` through the background worker.
 
-Queue-event horizon resync treats `PlayQueue.current_id` as advisory rather than authoritative. If queue mutations arrive while an immediate play is still in flight, the coordinator preserves the pending current track and rotates the resolved horizon from that in-flight track instead of snapping back to stale queue state. Once playback is established, explicit observed current-track IDs can still repair coordinator drift before recomputing the next-three window, and current-track background extract results are rejected even if ownership metadata was previously cleared. This prevents append+repeat mutations from re-admitting the playing song into background prefix work.
+Queue-event horizon resync treats `PlayQueue.current_id` as advisory rather than authoritative. If queue mutations arrive while an immediate play is still in flight, the coordinator preserves the pending current track and rotates the resolved horizon from that in-flight track instead of snapping back to stale queue state. Once playback is established, explicit observed current-track IDs can still repair coordinator drift before recomputing the bounded warm/prefix windows, and current-track background extract results are rejected even if ownership metadata was previously cleared. This prevents append+repeat mutations from re-admitting the playing song into background work.
 
 Stop/clear flows now fully reset coordinator playback state, and the prefix-window worker revalidates a claimed background job before preparing it. If a once-future track becomes the new current track before background preparation begins, that stale claim is dropped instead of running as a background prefix job.
 
