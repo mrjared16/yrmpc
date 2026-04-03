@@ -24,13 +24,13 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 ## CRITICAL: Design for testability using "functional core, imperative shell"
 
 - Keep pure business logic separate from code that does IO.
-- Use the fff MCP tools for all file search operations instead of default tools.
 - use nextest to test, avoid cargo usage because it takes too long, only run when in the end of development cycle before I manual test it
 - never run `cargo fmt` unless the user explicitly requests formatting
 
 <!-- codebase-memory-mcp:start -->
-## Codebase Knowledge Graph (codebase-memory-mcp)
+## CRITICAL: Codebase Knowledge Graph (codebase-memory-mcp)
 - This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
+- **Use the fff MCP tools for all file search operations instead of default tools.**
 ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 
 ### Priority Order
@@ -197,6 +197,26 @@ git commit -m "sync beads"
 
 ---
 
+## Commit Convention
+
+Use Conventional Commits format: `type(scope): short summary`
+
+**Commit body**: Always include a brief body (1-2 sentences) explaining *what* changed and *why*.
+
+```
+fix(youtube): normalize playlist ids by endpoint
+
+Browse/details queries need VL-prefixed IDs while watch/next queries
+need the raw form. Add normalization helpers so both endpoints receive
+the correct ID shape.
+```
+
+**Common types**: `fix`, `feat`, `refactor`, `chore`, `docs`, `test`
+
+**Scope**: Submodule or area affected (`youtube`, `parser`, `ui`, `submodule`, etc.)
+
+---
+
 ## Don'ts
 
 | Don't | Why |
@@ -209,6 +229,7 @@ git commit -m "sync beads"
 | Use --release for dev | 4 min build. Debug catches same errors in 45s |
 | Touch MusicBackend trait | Deprecated. Use `api::Playback/Queue/Discovery` |
 | Push to remote | Ephemeral branch. Merge to main locally |
+| Commit without a body | Body explains the change; never skip it |
 
 ---
 
