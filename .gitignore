@@ -29,3 +29,14 @@ docs/plans/
 # OpenCode / Sisyphus local runtime artifacts
 .opencode
 .sisyphus
+
+# Runtime logs (never commit)
+*.log
+daemon.log
+
+# Local dev config (machine-specific paths)
+config/yrmpc/
+.path-redactions.txt
+
+# Local cookie/auth config (use example files instead)
+config/rmpc.ron

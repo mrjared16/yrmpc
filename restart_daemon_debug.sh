@@ -4,7 +4,8 @@
 
 set -e
 
-DAEMON_PATH="<PROJECT_ROOT>/rmpc/target/debug/rmpcd"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DAEMON_PATH="$SCRIPT_DIR/rmpc/target/debug/rmpcd"
 SOCKET_PATH="/tmp/yrmpc-yt.sock"
 MPV_SOCKET_PATH="/tmp/yrmpc-yt.mpv.sock"
 LOG_FILE="/tmp/rmpcd.log"

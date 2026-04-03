@@ -4,7 +4,8 @@
 
 set -e
 
-DAEMON_PATH="<PROJECT_ROOT>/rmpc/target/release/rmpcd"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DAEMON_PATH="$SCRIPT_DIR/rmpc/target/release/rmpcd"
 SOCKET_PATH="/tmp/yrmpc-yt.sock"
 MPV_SOCKET_PATH="/tmp/yrmpc-yt.mpv.sock"
 LOG_FILE="/tmp/rmpcd.log"
@@ -15,30 +16,30 @@ pkill -f "rmpcd" 2>/dev/null || true
 # Check if MPV has existing playlist
 MPV_NEEDS_RESTART=false
 if [ -S "$MPV_SOCKET_PATH" ]; then
-    echo "=== Checking MPV playlist state ==="
+	echo "=== Checking MPV playlist state ==="
 
-    # Query MPV's playlist-count using socat
-    PLAYLIST_COUNT=$(echo '{"command": ["get_property", "playlist-count"]}' | \
-        socat - "$MPV_SOCKET_PATH" 2>/dev/null | \
-        grep -o '"data":[0-9]*' | \
-        grep -o '[0-9]*' || echo "0")
+	# Query MPV's playlist-count using socat
+	PLAYLIST_COUNT=$(echo '{"command": ["get_property", "playlist-count"]}' |
+		socat - "$MPV_SOCKET_PATH" 2>/dev/null |
+		grep -o '"data":[0-9]*' |
+		grep -o '[0-9]*' || echo "0")
 
-    if [ "$PLAYLIST_COUNT" -gt 0 ] 2>/dev/null; then
-        echo "⚠ MPV has $PLAYLIST_COUNT tracks in playlist - will restart for clean state"
-        MPV_NEEDS_RESTART=true
-    else
-        echo "✓ MPV playlist is empty - can reuse existing process"
-    fi
+	if [ "$PLAYLIST_COUNT" -gt 0 ] 2>/dev/null; then
+		echo "⚠ MPV has $PLAYLIST_COUNT tracks in playlist - will restart for clean state"
+		MPV_NEEDS_RESTART=true
+	else
+		echo "✓ MPV playlist is empty - can reuse existing process"
+	fi
 else
-    echo "No MPV socket found - will spawn new process"
+	echo "No MPV socket found - will spawn new process"
 fi
 
 # Kill MPV if it needs restart
 if [ "$MPV_NEEDS_RESTART" = true ]; then
-    echo "=== Killing MPV for clean restart ==="
-    pkill -f "mpv.*yrmpc-yt.mpv.sock" 2>/dev/null || true
-    sleep 1
-    rm -f "$MPV_SOCKET_PATH"
+	echo "=== Killing MPV for clean restart ==="
+	pkill -f "mpv.*yrmpc-yt.mpv.sock" 2>/dev/null || true
+	sleep 1
+	rm -f "$MPV_SOCKET_PATH"
 fi
 
 # Remove stale daemon socket
