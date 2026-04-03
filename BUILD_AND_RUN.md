@@ -64,6 +64,12 @@ rmpcd --socket /tmp/yrmpc-yt.sock --cookies ~/.config/yrmpc/cookies.txt
 # ~/.config/yrmpc/youtube.toml
 [api]
 cookie_file = "~/.config/yrmpc/cookies.txt"
+
+[audio]
+# balanced (default): next-N future tracks via extract_one (lower rate-limit risk)
+# performance: queue-wide URL extraction after startup via extract_batch
+background_extract_mode = "balanced"
+future_track_count = 2
 ```
 
 ---
@@ -137,7 +143,15 @@ extra_args = ["--gapless-audio=yes", "--prefetch-playlist=yes"]
 cookie_file = "~/.config/yrmpc/cookies.txt"
 cache_duration = "1h"
 max_search_results = 50
+
+[audio]
+background_extract_mode = "balanced"
+future_track_count = 2
 ```
+
+- `balanced`: next-N future tracks using `extract_one` (lower rate-limit risk)
+- `performance`: queue-wide URL extraction after startup using `extract_batch`
+- `future_track_count`: number of future tracks in the bounded extract/prefix window (default `2`)
 
 See `youtube.toml.example` for all options.
 
