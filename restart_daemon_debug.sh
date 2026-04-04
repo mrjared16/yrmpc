@@ -9,6 +9,7 @@ DAEMON_PATH="$SCRIPT_DIR/rmpc/target/debug/rmpcd"
 SOCKET_PATH="/tmp/yrmpc-yt.sock"
 MPV_SOCKET_PATH="/tmp/yrmpc-yt.mpv.sock"
 LOG_FILE="/tmp/rmpcd.log"
+DEV_XDG_CONFIG_HOME="$SCRIPT_DIR/config"
 
 echo "=== Stopping existing daemon ==="
 pkill -f "rmpcd" 2>/dev/null || true
@@ -47,6 +48,7 @@ rm -f "$SOCKET_PATH"
 
 echo "=== Starting daemon ==="
 echo "Log file: $LOG_FILE"
+echo "XDG_CONFIG_HOME: $DEV_XDG_CONFIG_HOME"
 echo "Press Ctrl+C to stop"
 echo ""
 
@@ -54,5 +56,5 @@ echo ""
 # Using ytdlp extractor for relay-focused debug testing (ytx is the fast dev default via restart_daemon.sh)
 # Relay audio delivery is now the default mode; no --audio-delivery flag is needed
 # RUST_LOG=debug enables diagnostic logs for debugging images and EOF
-RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit "video_id=\S+" "track=\S" >"$LOG_FILE"
+XDG_CONFIG_HOME="$DEV_XDG_CONFIG_HOME" RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit "video_id=\S+" "track=\S" >"$LOG_FILE"
 # RUST_BACKTRACE=1 RUST_LOG=debug "$DAEMON_PATH" --extractor ytx 2>&1 | loglit > "$LOG_FILE"

@@ -36,6 +36,7 @@ daemon.log
 
 # Local dev config (machine-specific paths)
 config/yrmpc/
+config/rmpc/
 .path-redactions.txt
 
 # Local cookie/auth config (use example files instead)

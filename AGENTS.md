@@ -26,11 +26,10 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 - Keep pure business logic separate from code that does IO.
 - use nextest to test, avoid cargo usage because it takes too long, only run when in the end of development cycle before I manual test it
 - never run `cargo fmt` unless the user explicitly requests formatting
-
+- **Prioritize the codebase-memory-mcp tool over fff MCP tools for all file search operations. Use the default Grep and Read tool only as the last resource**
 <!-- codebase-memory-mcp:start -->
 ## CRITICAL: Codebase Knowledge Graph (codebase-memory-mcp)
 - This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
-- **Use the fff MCP tools for all file search operations instead of default tools.**
 ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 
 ### Priority Order
