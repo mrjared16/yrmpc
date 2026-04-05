@@ -71,7 +71,9 @@ Content is organized into typed sections for flexible rendering:
 
 The PlayIntent architecture (ADR-002) provides atomic playback commands for low-latency playback with a shared preparation core:
 
-- **TUI Layer**: `QueueStore.play(PlayIntent)` with optimistic update
+- **TUI Layer**: `ctx.queue_mutator().play(PlayIntent)` with optimistic update
+- **Read API**: `ctx.queue_state()` returns `&QueueState` (current best-known queue snapshot)
+- **Write API**: `ctx.queue_mutator()` returns `QueueMutator` — the single gateway for all queue mutations
 - **IPC Layer**: `ServerCommand::PlayWithIntent { intent, request_id }`
 - **Daemon Layer**: `handle_play_with_intent()` → `orchestrator::play_position_sync(...)` → `MediaPreparer::prepare`
 

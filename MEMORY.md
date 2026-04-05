@@ -108,10 +108,10 @@ YouTube API → Song.metadata["type"] → DetailItem::from() → type_icon() →
 Search • Playback • Queue • Auto-advance • Repeat/Shuffle • MPRIS • Daemon • Navigator • EDL cache • Sectioned results • Backend abstraction • CachedExtractor • MPV event-driven playback
 
 ### In Progress 🔄
-MediaItem migration • Action system integration • QueueStore migration (40%) • Navigator consolidation (60%)
+MediaItem migration • Action system integration • QueueState/QueueMutator refactor (complete) • Navigator consolidation (60%)
 
 ### Known Issues 🔴
-- QueueStore + app_state + ctx.queue = triple source of truth (migration incomplete)
+- ~~QueueStore + app_state + ctx.queue = triple source of truth (migration incomplete)~~ → **Fixed**: `QueueState` + `QueueMutator` centralizes queue authority
 - Navigator + PaneContainer both own pane instances (dual runtime)
 - Action system bypassed by panes (infrastructure exists, not integrated)
 - Two ActionKind enums (domain/content.rs vs actions/intent.rs)
