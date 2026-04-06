@@ -48,8 +48,8 @@ This ADR is intentionally self-contained. A new implementer should be able to be
 The current playback architecture has four linked problems:
 
 1. **Immediate play does unnecessary preparation**
-   - `Orchestrator::play_position_sync` prepares a 3-track plan synchronously.
-   - The current track is not isolated cleanly from future-track preparation.
+   - `Orchestrator::play_position_sync` must isolate current-track startup from future-track work.
+   - Startup should not block on prefix/window preparation for later tracks.
 
 2. **Immediate and background paths conflict**
    - Queue add triggers queue-wide extraction work.
@@ -96,7 +96,7 @@ This is an architecture problem, not just a bug.
 ### 2.1 Primary goals
 
 1. **Immediate play must start the current track only**
-2. **Background work must finish future-track prep before the next song starts**
+2. **Background work starts only after playback is confirmed**
 3. **One track must have one active owner at a time for playback-critical work**
 4. **Relay strategy must be explicit and testable**
 5. **The current track must not be reprocessed by background prefix work during fragile startup**
@@ -181,7 +181,7 @@ The system stops treating playback as â€œprepare everything near the play call.â
 Instead:
 
 - **Immediate path** owns the current track only.
-- **Background path** owns only future tracks.
+- **Background path** owns only future tracks, and begins after `PlaybackStarted`.
 - **Coordinator** arbitrates ownership and state.
 - **Relay planner** converts prepared facts into one concrete play strategy.
 - **Relay runtime** executes that chosen strategy.

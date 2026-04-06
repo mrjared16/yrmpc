@@ -75,7 +75,7 @@ The PlayIntent architecture (ADR-002) provides atomic playback commands for low-
 - **Read API**: `ctx.queue_state()` returns `&QueueState` (current best-known queue snapshot)
 - **Write API**: `ctx.queue_mutator()` returns `QueueMutator` — the single gateway for all queue mutations
 - **IPC Layer**: `ServerCommand::PlayWithIntent { intent, request_id }`
-- **Daemon Layer**: `handle_play_with_intent()` → `orchestrator::play_position_sync(...)` → `MediaPreparer::prepare`
+- **Daemon Layer**: `handle_play_with_intent()` → `orchestrator::play_position_sync(...)` for current-track-only startup prep, then post-`PlaybackStarted` future warmup via `MediaPreparer`
 
 Key types:
 - `PlayIntent`: Context, Next, Append, Radio (seed-only v1)

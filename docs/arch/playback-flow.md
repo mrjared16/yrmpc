@@ -45,6 +45,8 @@ Worker forwards latest PreparationPlan -> MediaPreparer.apply_plan(plan)
         └─ reconcile prefix targets through shared preload jobs
 ```
 
+Future prep is gated on `PlaybackStarted`: queue events update planning state only, and `prefix_targets` / `extract_scope` are exported after playback confirmation.
+
 ## Authoritative Runtime Path
 
 ### 1) Mode planning
@@ -66,13 +68,13 @@ On immediate play:
 3. prepare only the current track with `PreloadTier::Immediate`
 4. build the runtime input, allowing explicit relay-to-direct fallback only for this current track
 5. append the single current-track input and start MPV playback
-6. after playback actually starts, queue/playback handlers publish a generic plan-changed signal from the active MPV playback-confirmation edge
+6. after playback actually starts, queue/playback handlers publish a generic plan-changed signal from the active MPV playback-confirmation edge; they do not synchronously prepare media or mutate the MPV playlist during startup
 7. the background worker coalesces those signals and forwards only the latest `PreparationPlan` into `MediaPreparer::apply_plan(...)`
 8. `MediaPreparer` reconciles active window, extract scope, and prefix targets using the shared job registry rather than orchestrator-owned wait/claim logic
 
 While immediate prepare is still in flight, stale MPV `TrackChanged` noise from tearing down the old playlist is ignored for coordinator resync purposes. That now applies to both relay-first startup and the direct-fallback branch, preventing a `stop/clear -> TrackChanged(-1)` race from restoring the previous song as the coordinator's current track before the new immediate play actually starts.
 
-Queue-add handling updates the coordinator horizon only. It no longer warms added tracks directly or performs ad hoc immediate/gapless/eager scheduling.
+Queue-add handling updates the coordinator horizon only. It no longer warms added tracks directly or performs ad hoc immediate/gapless/eager scheduling during startup.
 
 Active-playback queue reconciliation now trims MPV back to the current track, refreshes coordinator policy state, and defers any future-track work to the post-confirm background worker instead of synchronously preparing newly exposed tail tracks.
 
@@ -136,6 +138,18 @@ Queue-event horizon resync treats `PlayQueue.current_id` as advisory rather than
 
 Stop/clear flows now fully reset coordinator playback state and publish an empty plan, which clears the active playback window through the same `apply_plan(...)` path. A direct empty-window fallback remains only for code paths that wire a preparer but no plan publisher.
 
+## Immediate Preemption of Queue-Warm Jobs
+
+When an `Immediate` prepare encounters an existing `InFlightJob` that is still resolving under `ResolutionSource::QueueWarm`, it does **not** wait for the shared queue-warm job to complete. Instead, it immediately takes over:
+
+1. `take_over_queue_warm_with_demand_extract(...)` flips the job's resolution source from `QueueWarm` → `Demand`
+2. A fresh single-track extraction (`extract_one_fresh`) is spawned for the current track
+3. The original queue-warm batch continues in the background; its result for this track becomes stale and is dropped via lease-token checks
+
+This ensures time-to-first-audio is never held hostage by batch extraction throughput. Duplicate extraction work is acceptable — startup latency wins over batch efficiency.
+
+Non-immediate tiers (`Gapless`, `Eager`, `Background`) still share queue-warm jobs normally and wait up to `SHARED_JOB_JOIN_TIMEOUT` (6s) before triggering their own demand takeover.
+
 ## URL Retrieval Paths (Current)
 
 There are now three distinct URL retrieval paths, all routed through `MediaPreparer`:
@@ -144,6 +158,7 @@ There are now three distinct URL retrieval paths, all routed through `MediaPrepa
    - `MediaPreparer.prepare(track_id, Immediate)`
    - resolves one URL through `StagingPipeline::resolve_stream_url()` / `UrlResolver::get_url()`
    - returns `PreparedMedia` for runtime input building
+   - if the track is already in a queue-warm batch job, it immediately takes over with demand extraction (see "Immediate Preemption of Queue-Warm Jobs" above)
 
 2. **Background extract scope**
    - `MediaPreparer.apply_plan(...)` -> `apply_extract_scope(...)`
