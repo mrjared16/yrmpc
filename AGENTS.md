@@ -26,7 +26,7 @@ cd rmpc && cargo build              # Debug build (~45s, use for dev)
 - Keep pure business logic separate from code that does IO.
 - use nextest to test, avoid cargo usage because it takes too long, only run when in the end of development cycle before I manual test it
 - never run `cargo fmt` unless the user explicitly requests formatting
-- **Prioritize the codebase-memory-mcp tool over fff MCP tools for all file search operations. Use the default Grep and Read tool only as the last resource**
+- **Tool priority for all search operations: codebase-memory-mcp → fff tools → default Grep/Read (last resort only)**
 <!-- codebase-memory-mcp:start -->
 ## CRITICAL: Codebase Knowledge Graph (codebase-memory-mcp)
 - This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
@@ -39,15 +39,24 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 4. `query_graph` — run Cypher queries for complex patterns
 5. `get_architecture` — high-level project summary
 
-### When to fall back to grep/glob
-- Searching for string literals, error messages, config values
-- Searching non-code files (Dockerfiles, shell scripts, configs)
-- When MCP tools return insufficient results
+### When to fall back to fff tools
+- MCP tools return insufficient results
+- Need fuzzy file name lookup → `fff_find_files`
+- Need single-pattern content search → `fff_grep`
+- Need multi-pattern content search (OR logic) → `fff_multi_grep`
+
+### When to fall back to default Grep/Read (LAST RESORT)
+- Searching for string literals, error messages, config values not found by fff
+- Searching non-code files (Dockerfiles, shell scripts, configs) when fff fails
+- When fff tools return insufficient results
 
 ### Examples
 - Find a handler: `search_graph(name_pattern=".*OrderHandler.*")`
 - Who calls it: `trace_call_path(function_name="OrderHandler", direction="inbound")`
 - Read source: `get_code_snippet(qualified_name="pkg/orders.OrderHandler")`
+- Find a file: `fff_find_files(query="navigator.rs")`
+- Search code: `fff_grep(query="PlaybackCoordinator")`
+- Multi-pattern: `fff_multi_grep(patterns=["has_cached_audio", "ensure_prefix"])`
 <!-- codebase-memory-mcp:end -->
 ---
 
