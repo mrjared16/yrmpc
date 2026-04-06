@@ -206,8 +206,11 @@ ensure_prefix(video_id)
 A fully functional localhost HTTP daemon bridging the `AudioCache` and upstream. Replaces earlier design ideas around offline proxy streaming.
 - Manages a local `TCPListener` to serve stream chunks for `LocalRelay` modes.
 - Enforces an uninterrupted playback session via MPV playing from `localhost`.
-- Current behavior streams downstream immediately but still forwards one upstream range per player request.
-- Planned throttling-bypass hardening keeps the same localhost relay contract while splitting large relay -> YouTube requests into smaller chunks.
+- **Upstream recovery**: when streaming fails, relay tries 3 fallback read plans (QueryRange, AnchoredQueryRange, ChunkedQueryRange). If all plans exhaust with zero upstream progress, it forces a fresh URL via `UrlResolver::get_url_fresh()` and resumes from the exact byte already delivered to MPV.
+- **Byte-accurate accounting**: downstream writes use a `write()` loop that counts successful bytes, so resume boundaries are client-accurate even on partial-write failures.
+- **Tee mode failure cleanup**: if tee streaming fails mid-flight, the incomplete prefix file is deleted and playback continues uncached from the last delivered byte. Later plays can tee again from cache miss.
+- **Failure scope classification**: upstream read failures (`Upstream`) trigger recovery; downstream write failures (`Downstream`) do not; local disk/protocol errors (`Local`) are terminal.
+- **MPV playlist prefetch**: disabled for relay transport to prevent future relay items from being poisoned during early prefetch.
 
 ## Legacy Components (REMOVED)
 
@@ -257,7 +260,7 @@ Legacy components such as `RangeSet`, `ProgressiveAudioFile`, and `AudioFileMana
                     └──────────────┘
 ```
 
-The diagram above shows the concat path. Relay uses the same preparation core and staged prefix, but hands MPV a localhost relay URL instead of a `lavf://concat` URL. After the planned throttling bypass is implemented, Relay will still stream bytes to MPV immediately; only the relay -> YouTube leg changes by chunking large upstream ranges.
+The diagram above shows the concat path. Relay uses the same preparation core and staged prefix, but hands MPV a localhost relay URL instead of a `lavf://concat` URL. Relay now handles upstream failures by refreshing URLs and resuming from the last delivered byte, and drops incomplete tee prefixes on failure to avoid corrupted cache promotion.
 
 ## Key Design Decisions
 

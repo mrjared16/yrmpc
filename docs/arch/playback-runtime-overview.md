@@ -104,7 +104,7 @@ After the preparer runs, the orchestrator calls a single transport-aware boundar
 
 Relay runtime is now wired in daemon startup for `LocalRelay` transport and persists with the server lifecycle. Direct fallback still applies for Immediate-tier staging timeout/failure.
 
-Today `RelayRuntime` streams staged bytes and upstream bytes over localhost, but it still forwards a single upstream `Range` request for each player request. The planned throttling-bypass update keeps the same MPV-visible localhost URL and immediate downstream streaming behavior while splitting the relay -> YouTube request into throttle-safe chunks.
+Relay now handles upstream failures by trying 3 fallback read plans, then forcing a fresh URL and resuming from the exact byte already delivered to MPV. Tee mode drops incomplete prefix files on failure and continues uncached. MPV playlist prefetch is disabled for relay transport to prevent future items from being poisoned during early prefetch.
 
 ---
 
@@ -189,4 +189,4 @@ The preparer checks cached prefix metadata first and only downloads prefix bytes
 
 ## Bottom Line
 
-The old stable baseline was direct passthrough with ytdlp. Staged intentionally adds concat staging. Relay is now a real localhost runtime path that streams staged-prefix bytes followed by upstream bytes. After the throttling-bypass transport hardening lands, Relay should keep that same player-facing shape while chunking only the upstream relay -> YouTube leg. Current code uses one transport-aware post-preparation boundary in `PlaybackService`, with `PreparedMediaInputAdapter` for non-relay input mapping and `RelayRuntime` for relay delivery.
+The old stable baseline was direct passthrough with ytdlp. Staged intentionally adds concat staging. Relay is now a real localhost runtime path that streams staged-prefix bytes followed by upstream bytes. Relay handles upstream failures by refreshing URLs and resuming from the last delivered byte, drops incomplete tee prefixes on failure, and disables MPV playlist prefetch for relay transport. Current code uses one transport-aware post-preparation boundary in `PlaybackService`, with `PreparedMediaInputAdapter` for non-relay input mapping and `RelayRuntime` for relay delivery.
