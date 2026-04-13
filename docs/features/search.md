@@ -9,11 +9,56 @@ Documents the complete search flow from user query to rendered results, covering
 
 ## Interaction Model
 
-The Search pane follows a Vim-inspired interaction model:
+The Search pane follows a Vim inspired interaction model:
 - **Navigation Mode** (default): Navigate results with `j`/`k`. Press `i` to enter Insert mode.
 - **Insert Mode**: Type query in the input box. Press `Esc` to return to Navigation mode.
 - **Trigger Search**: Press `Enter` (in either mode) to execute the search.
 - **Results**: `Enter` on a result plays it (or adds to queue based on config).
+
+### Edit Commands (Insert Mode)
+
+Text input uses a shared `EditCommand` system (`src/ui/widgets/edit_command.rs`) that decodes
+keystrokes into semantic edit operations. This ensures navigation keys like `j`/`k` are never
+intercepted while typing, and provides readline-style editing:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+C` / `Ctrl+L` | Clear entire line |
+| `Ctrl+N` | Next suggestion (if showing) |
+| `Ctrl+P` | Previous suggestion (if showing) |
+| `Alt+F` | Move cursor forward one word |
+| `Alt+B` | Move cursor backward one word |
+| `Esc` | Exit Insert mode |
+| `Enter` | Accept / submit query |
+
+**Note:** `Alt+F`/`Alt+B` behavior depends on terminal sending ALT as a modifier (not `Esc`+char).
+
+### Architecture: EditCommand Flow
+
+```
+KeyPress
+  │
+  ▼
+resolve_edit_command(key)          ← reads modifiers, maps to EditCommand
+  │
+  ▼
+EditCommand enum                   ← { Insert(c), Backspace, ClearAll,
+  │                                     WordForward, WordBackward,
+  │                                     SuggestionsUp/Down, Accept, Cancel }
+  ▼
+apply_edit_command(value, cursor)  ← mutates text + cursor position
+  │
+  ▼
+ctx.render()                       ← only if text actually changed
+```
+
+Key files:
+| File | Purpose |
+|------|---------|
+| `rmpc/src/ui/widgets/edit_command.rs` | EditCommand enum, resolver, apply helpers |
+| `rmpc/src/shared/key_event.rs` | `KeyEvent::modifiers()` accessor |
+| `rmpc/src/ui/widgets/input.rs` | Cursor-aware text rendering |
+| `rmpc/src/ui/panes/search/inputs.rs` | `TextboxInput { value, cursor }` state |
 
 ## Architecture Overview
 
