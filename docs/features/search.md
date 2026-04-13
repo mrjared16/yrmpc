@@ -24,6 +24,7 @@ intercepted while typing, and provides readline-style editing:
 | Shortcut | Action |
 |----------|--------|
 | `Ctrl+C` / `Ctrl+L` | Clear entire line |
+| `Ctrl+W` | Delete previous word |
 | `Ctrl+N` | Next suggestion (if showing) |
 | `Ctrl+P` | Previous suggestion (if showing) |
 | `Alt+F` | Move cursor forward one word |
@@ -42,7 +43,7 @@ KeyPress
 resolve_edit_command(key)          ← reads modifiers, maps to EditCommand
   │
   ▼
-EditCommand enum                   ← { Insert(c), Backspace, ClearAll,
+EditCommand enum                   ← { Insert(c), Backspace, DeleteWordBackward, ClearAll,
   │                                     WordForward, WordBackward,
   │                                     SuggestionsUp/Down, Accept, Cancel }
   ▼
