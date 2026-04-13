@@ -1,11 +1,12 @@
 #!/bin/bash
-# rmpcd-install - Install YouTube Music daemon as systemd user service
+# rmpcd-install - First-time install: setup daemon + TUI as systemd user service
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
+RMPCD_BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
+RMPC_BINARY="$PROJECT_DIR/rmpc/target/release/rmpc"
 SERVICE_FILE="$SCRIPT_DIR/rmpcd.service"
 
 # Colors
@@ -14,41 +15,68 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== rmpcd Installation ===${NC}"
+echo -e "${GREEN}=== rmpcd First-Time Installation ===${NC}"
 
-# Check if binary exists
-if [ ! -f "$BINARY" ]; then
-    echo -e "${YELLOW}Binary not found. Building...${NC}"
+# Check if already installed
+if [ -f ~/.local/bin/rmpcd ] && systemctl --user is-active --quiet rmpcd 2>/dev/null; then
+    echo -e "${YELLOW}rmpcd appears to be already installed and running.${NC}"
+    echo -e "${YELLOW}If you want to update, run:${NC} ./setup/rmpcd-update"
+    echo ""
+    read -p "Continue anyway? [y/N] " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+fi
+
+# Check if binaries exist
+if [ ! -f "$RMPCD_BINARY" ] || [ ! -f "$RMPC_BINARY" ]; then
+    echo -e "${YELLOW}Release binaries not found. Building...${NC}"
     cd "$PROJECT_DIR/rmpc"
     cargo build --release
-    BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
 fi
 
 # Create directories
 mkdir -p ~/.local/bin
 mkdir -p ~/.config/systemd/user
+mkdir -p ~/.config/rmpc
+mkdir -p ~/.cache/rmpc
 
-# Copy binary
-echo "Installing binary to ~/.local/bin/rmpcd..."
-cp "$BINARY" ~/.local/bin/rmpcd
-chmod +x ~/.local/bin/rmpcd
-
-# Copy service file
-echo "Installing service to ~/.config/systemd/user/rmpcd.service..."
-cp "$SERVICE_FILE" ~/.config/systemd/user/rmpcd.service
-
-# Stop existing service if running
+# Stop any existing service (safe cleanup)
 systemctl --user stop rmpcd 2>/dev/null || true
-
-# Kill any leftover processes
 pkill -9 rmpcd 2>/dev/null || true
 pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
-
-# Remove stale sockets
 rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
 
-# Reload systemd
-echo "Reloading systemd..."
+# Copy binaries
+echo "Installing rmpcd to ~/.local/bin/rmpcd..."
+cp "$RMPCD_BINARY" ~/.local/bin/rmpcd
+chmod +x ~/.local/bin/rmpcd
+
+echo "Installing rmpc to ~/.local/bin/rmpc..."
+cp "$RMPC_BINARY" ~/.local/bin/rmpc
+chmod +x ~/.local/bin/rmpc
+
+# Copy config ONLY if not present
+if [ -f ~/.config/rmpc/config.ron ]; then
+    echo -e "${YELLOW}~/.config/rmpc/config.ron already exists. Keeping it.${NC}"
+else
+    cp "$SCRIPT_DIR/config.ron" ~/.config/rmpc/config.ron
+    echo "Created ~/.config/rmpc/config.ron (edit to customize)"
+fi
+
+# Copy auth template ONLY if not present
+if [ ! -f ~/.config/rmpc/headers_auth.json ]; then
+    cp "$SCRIPT_DIR/headers_auth.json.template" ~/.config/rmpc/headers_auth.json
+    echo "Created ~/.config/rmpc/headers_auth.json (template - EDIT THIS)"
+else
+    echo "~/.config/rmpc/headers_auth.json already exists. Keeping it."
+fi
+
+# Install systemd service
+echo "Installing systemd service..."
+cp "$SERVICE_FILE" ~/.config/systemd/user/rmpcd.service
 systemctl --user daemon-reload
 
 # Enable and start service
@@ -56,20 +84,30 @@ echo "Enabling and starting rmpcd service..."
 systemctl --user enable rmpcd
 systemctl --user start rmpcd
 
-# Wait for service to start
+# Wait and verify
 sleep 2
 
-# Check status
 if systemctl --user is-active --quiet rmpcd; then
     echo -e "${GREEN}✅ rmpcd service is running!${NC}"
     echo ""
-    echo "Usage:"
-    echo "  systemctl --user status rmpcd   # Check status"
-    echo "  systemctl --user restart rmpcd  # Restart"
-    echo "  systemctl --user stop rmpcd     # Stop"
-    echo "  journalctl --user -u rmpcd -f   # View logs"
+    echo "Installed binaries:"
+    echo "  rmpcd  - YouTube Music daemon (systemd user service)"
+    echo "  rmpc   - TUI client"
     echo ""
-    echo "Now you can run: rmpc --config config/rmpc.ron"
+    echo "Service commands:"
+    echo "  systemctl --user status rmpcd   # Check status"
+    echo "  systemctl --user restart rmpcd  # Restart daemon"
+    echo "  systemctl --user stop rmpcd     # Stop daemon"
+    echo "  journalctl --user -u rmpcd -f   # View daemon logs"
+    echo ""
+    echo "Update command:"
+    echo "  ./setup/rmpcd-update"
+    echo ""
+    echo "Launch TUI:"
+    echo "  rmpc"
+    echo ""
+    echo "Config: ~/.config/rmpc/config.ron"
+    echo "Cache:  ~/.cache/rmpc"
 else
     echo -e "${RED}❌ Service failed to start. Check logs:${NC}"
     echo "  journalctl --user -u rmpcd -n 20"

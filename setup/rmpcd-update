@@ -1,0 +1,69 @@
+#!/bin/bash
+# rmpcd-update - Update binaries and restart daemon (safe, non-destructive)
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+RMPCD_BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
+RMPC_BINARY="$PROJECT_DIR/rmpc/target/release/rmpc"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${GREEN}=== rmpcd Update ===${NC}"
+
+# Check if binaries exist
+if [ ! -f "$RMPCD_BINARY" ] || [ ! -f "$RMPC_BINARY" ]; then
+    echo -e "${YELLOW}Release binaries not found. Building...${NC}"
+    cd "$PROJECT_DIR/rmpc"
+    cargo build --release
+fi
+
+# Check if daemon is currently running (for confirmation)
+WAS_RUNNING=false
+if systemctl --user is-active --quiet rmpcd 2>/dev/null; then
+    WAS_RUNNING=true
+    echo -e "${YELLOW}rmpcd is currently running. It will be restarted.${NC}"
+fi
+
+# Stop daemon (required to avoid "Text file busy" on cp)
+echo -e "${YELLOW}Stopping rmpcd service...${NC}"
+systemctl --user stop rmpcd 2>/dev/null || true
+
+# Kill any orphaned processes that might hold the binary open
+pkill -9 rmpcd 2>/dev/null || true
+pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
+
+# Clean up stale sockets
+rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
+
+# Copy binaries
+echo "Updating rmpcd..."
+cp "$RMPCD_BINARY" ~/.local/bin/rmpcd
+chmod +x ~/.local/bin/rmpcd
+
+echo "Updating rmpc..."
+cp "$RMPC_BINARY" ~/.local/bin/rmpc
+chmod +x ~/.local/bin/rmpc
+
+# Reload systemd (in case service file changed)
+systemctl --user daemon-reload
+
+# Start daemon
+echo -e "${YELLOW}Starting rmpcd service...${NC}"
+systemctl --user start rmpcd
+
+# Wait and verify
+sleep 2
+
+if systemctl --user is-active --quiet rmpcd; then
+    echo -e "${GREEN}✅ rmpcd updated and running!${NC}"
+else
+    echo -e "${RED}❌ Service failed to start. Check logs:${NC}"
+    echo "  journalctl --user -u rmpcd -n 20"
+    exit 1
+fi
