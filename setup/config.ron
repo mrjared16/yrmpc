@@ -1,7 +1,59 @@
+#![enable(implicit_some)]
+#![enable(unwrap_newtypes)]
+#![enable(unwrap_variant_newtypes)]
 (
     backend: youtube,
+    cache_dir: "~/.cache/rmpc",
     youtube: (
         auth_file: Some("~/.config/rmpc/headers_auth.json"),
     ),
-    theme: Some("default"),
+    // Search result sections order and visibility
+    // Available: "top_results", "songs", "artists", "albums", "playlists", "videos"
+    search: (
+        sections: ["top_results", "songs", "artists", "albums", "playlists"],
+    ),
+    // Use new Navigator architecture (enabled: false = new, true = legacy)
+    legacy_panes: (
+        enabled: false,
+    ),
+    // Theme file with rich list UI enabled
+    theme: Some("rich_test"),
+    tabs: [
+        (
+            name: "Search",
+            pane: Pane(Search),
+        ),
+        (
+            name: "Queue",
+            pane: Split(
+                direction: Horizontal,
+                panes: [
+                    (
+                        size: "35%",
+                        pane: Pane(AlbumArt),
+                    ),
+                    (
+                        size: "65%",
+                        pane: Pane(Queue)
+                    ),
+                ],
+            ),
+        ),
+        (
+            name: "Saved",
+            pane: Split(
+                direction: Horizontal,
+                panes: [
+                    (
+                        size: "50%",
+                        pane: Pane(Playlists),
+                    ),
+                    (
+                        size: "50%",
+                        pane: Pane(Albums),
+                    ),
+                ],
+            ),
+        ),
+    ],
 )

@@ -56,6 +56,15 @@ The YouTube backend connects yrmpc to YouTube Music via the `ytmapi-yrmpc` libra
 | Queue Service | `backends/youtube/services/queue_service.rs` | Queue state |
 | Internal Events | `backends/youtube/services/internal_event.rs` | Typed MPV event routing |
 
+## Multi-client IPC behavior (2026-04)
+
+- **Concurrent sessions:** daemon accept loop handles multiple connected TUI clients concurrently.
+- **Newest-client wins:** only the most recently connected session is the active idle owner; older sessions are superseded and stopped.
+- **Monotonic supersession:** a superseded session stays blocked even if the newer client disconnects.
+- **Snapshot-on-subscribe:** first idle request of a new session emits baseline `player`/`playlist`/`options` events to trigger UI resync.
+- **No auto-reconnect for superseded TUIs:** older clients exit cleanly instead of reconnecting and stealing ownership.
+- **Reconnect recovery:** connection-level request failures trigger reconnect in core client lifecycle, reducing zombie/stale behavior after daemon restarts.
+
 ## Resilience Architecture (2024-01)
 
 YouTube Music API changes frequently. The backend uses a hybrid resilience strategy:

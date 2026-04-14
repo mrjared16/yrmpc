@@ -17,11 +17,11 @@ NC='\033[0m'
 echo -e "${GREEN}=== rmpcd Update ===${NC}"
 
 # Check if binaries exist
-if [ ! -f "$RMPCD_BINARY" ] || [ ! -f "$RMPC_BINARY" ]; then
-    echo -e "${YELLOW}Release binaries not found. Building...${NC}"
-    cd "$PROJECT_DIR/rmpc"
-    cargo build --release
-fi
+# if [ ! -f "$RMPCD_BINARY" ] || [ ! -f "$RMPC_BINARY" ]; then
+    # echo -e "${YELLOW}Release binaries not found. Building...${NC}"
+cd "$PROJECT_DIR/rmpc"
+cargo build --release
+# fi
 
 # Check if daemon is currently running (for confirmation)
 WAS_RUNNING=false
