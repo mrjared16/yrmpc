@@ -5,8 +5,9 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-RMPCD_BINARY="$PROJECT_DIR/rmpc/target/release/rmpcd"
-RMPC_BINARY="$PROJECT_DIR/rmpc/target/release/rmpc"
+CARGO_DIR="$PROJECT_DIR/rmpc"
+RMPCD_BINARY="$CARGO_DIR/target/release/rmpcd"
+RMPC_BINARY="$CARGO_DIR/target/release/rmpc"
 
 # Colors
 RED='\033[0;31m'
@@ -16,12 +17,20 @@ NC='\033[0m'
 
 echo -e "${GREEN}=== rmpcd Update ===${NC}"
 
-# Check if binaries exist
-# if [ ! -f "$RMPCD_BINARY" ] || [ ! -f "$RMPC_BINARY" ]; then
-    # echo -e "${YELLOW}Release binaries not found. Building...${NC}"
-cd "$PROJECT_DIR/rmpc"
+echo -e "${YELLOW}Building release binaries...${NC}"
+cd "$CARGO_DIR"
 cargo build --release
-# fi
+cd - >/dev/null
+
+# Verify binaries exist after build attempt
+if [ ! -f "$RMPCD_BINARY" ]; then
+    echo -e "${RED}❌ rmpcd binary not found at $RMPCD_BINARY${NC}"
+    exit 1
+fi
+if [ ! -f "$RMPC_BINARY" ]; then
+    echo -e "${RED}❌ rmpc binary not found at $RMPC_BINARY${NC}"
+    exit 1
+fi
 
 # Check if daemon is currently running (for confirmation)
 WAS_RUNNING=false
@@ -41,14 +50,26 @@ pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
 # Clean up stale sockets
 rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
 
+# Install directory
+INSTALL_DIR="$HOME/.local/bin"
+mkdir -p "$INSTALL_DIR"
+
 # Copy binaries
 echo "Updating rmpcd..."
-cp "$RMPCD_BINARY" ~/.local/bin/rmpcd
-chmod +x ~/.local/bin/rmpcd
+install -Dm755 "$RMPCD_BINARY" "$INSTALL_DIR/rmpcd"
 
 echo "Updating rmpc..."
-cp "$RMPC_BINARY" ~/.local/bin/rmpc
-chmod +x ~/.local/bin/rmpc
+install -Dm755 "$RMPC_BINARY" "$INSTALL_DIR/rmpc"
+
+# Verify installed binary matches built binary
+if ! cmp -s "$RMPCD_BINARY" "$INSTALL_DIR/rmpcd"; then
+    echo -e "${RED}❌ Installed rmpcd does not match built binary${NC}"
+    exit 1
+fi
+if ! cmp -s "$RMPC_BINARY" "$INSTALL_DIR/rmpc"; then
+    echo -e "${RED}❌ Installed rmpc does not match built binary${NC}"
+    exit 1
+fi
 
 # Reload systemd (in case service file changed)
 systemctl --user daemon-reload
