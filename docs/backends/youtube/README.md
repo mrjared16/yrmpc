@@ -138,13 +138,19 @@ Known issues and workarounds:
 
 ## Configuration
 
-```ron
-youtube: (
-    extractor: Ytx,           // or YtDlp
-    prefetch_count: 3,        // URLs to prefetch ahead
-    stream_timeout: "30s",    // Max wait for stream URL
-    sync_enabled: true,       // Optional 2-way sync
-),
+```toml
+# ~/.config/rmpc/youtube.toml
+[api.extractor]
+primary = "ytx"   # default
+fallback = true    # default
+```
+
+Legacy fallback path (still supported): `~/.config/yrmpc/youtube.toml`
+
+You can override these at runtime:
+
+```bash
+rmpcd --extractor ytdlp --extractor-fallback false
 ```
 
 ## Cross-References

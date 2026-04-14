@@ -50,20 +50,20 @@ YouTube Music requires authentication. Export cookies from your browser:
 1. Install "Get cookies.txt" extension
 2. Go to music.youtube.com
 3. Click extension → Export cookies.txt
-4. Save as `~/.config/yrmpc/cookies.txt`
+4. Save as `~/.config/rmpc/cookie.txt`
 
 ### 2. Configure
 
 **Option A: Command line**
 ```bash
-rmpcd --socket /tmp/yrmpc-yt.sock --cookies ~/.config/yrmpc/cookies.txt
+rmpcd --socket /tmp/yrmpc-yt.sock --cookies ~/.config/rmpc/cookie.txt
 ```
 
 **Option B: Config file**
 ```toml
-# ~/.config/yrmpc/youtube.toml
+# ~/.config/rmpc/youtube.toml
 [api]
-cookie_file = "~/.config/yrmpc/cookies.txt"
+cookie_file = "~/.config/rmpc/cookie.txt"
 
 [audio]
 # balanced (default): next-N future tracks via extract_one (lower rate-limit risk)
@@ -109,7 +109,7 @@ ls -la /tmp/yrmpc-yt.sock
 
 **Fix:**
 1. Export cookies from browser
-2. Save to `~/.config/yrmpc/cookies.txt`
+2. Save to `~/.config/rmpc/cookie.txt`
 3. Restart daemon with `--cookies` flag
 
 ### Playback Issues
@@ -127,7 +127,9 @@ RUST_LOG=debug rmpcd --socket /tmp/yrmpc-yt.sock 2>&1 | grep mpv
 
 ## ⚙️ Configuration
 
-**Location:** `~/.config/yrmpc/youtube.toml`
+**Location:** `~/.config/rmpc/youtube.toml`
+
+Legacy fallback path (still supported): `~/.config/yrmpc/youtube.toml`
 
 **Example:**
 ```toml
@@ -140,13 +142,24 @@ volume = 80
 extra_args = ["--gapless-audio=yes", "--prefetch-playlist=yes"]
 
 [api]
-cookie_file = "~/.config/yrmpc/cookies.txt"
+cookie_file = "~/.config/rmpc/cookie.txt"
 cache_duration = "1h"
 max_search_results = 50
+
+[api.extractor]
+primary = "ytx"   # default: "ytx" (fast path)
+fallback = true    # default: true (use other extractor on failure)
 
 [audio]
 background_extract_mode = "balanced"
 future_track_count = 2
+```
+
+`rmpcd` CLI can override extractor policy per run:
+
+```bash
+# Force yt-dlp primary with fallback disabled for this run only
+rmpcd --extractor ytdlp --extractor-fallback false
 ```
 
 - `balanced`: next-N future tracks using `extract_one` (lower rate-limit risk)
