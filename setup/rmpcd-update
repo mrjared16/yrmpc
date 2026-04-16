@@ -44,8 +44,8 @@ echo -e "${YELLOW}Stopping rmpcd service...${NC}"
 systemctl --user stop rmpcd 2>/dev/null || true
 
 # Kill any orphaned processes that might hold the binary open
-pkill -9 rmpcd 2>/dev/null || true
-pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
+# pkill -9 rmpcd 2>/dev/null || true
+# pkill -9 -f "mpv.*yrmpc" 2>/dev/null || true
 
 # Clean up stale sockets
 rm -f /tmp/yrmpc-yt.sock /tmp/yrmpc-yt.mpv.sock
@@ -76,7 +76,7 @@ systemctl --user daemon-reload
 
 # Start daemon
 echo -e "${YELLOW}Starting rmpcd service...${NC}"
-systemctl --user start rmpcd
+systemctl --user restart rmpcd
 
 # Wait and verify
 sleep 2
